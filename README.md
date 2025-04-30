@@ -1,5 +1,6 @@
 # deepl-mcp-server
 
+[![Version](https://img.shields.io/npm/v/deepl-mcp-server.svg)](https://www.npmjs.org/package/deepl-mcp-server)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blueviolet.svg)](https://github.com/DeepLcom/deepl-mcp-server/blob/main/LICENSE)
 
 A Model Context Protocol (MCP) server that provides translation capabilities using the DeepL API.
