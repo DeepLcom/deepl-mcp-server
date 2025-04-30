@@ -6,7 +6,7 @@ Efficiently translate content with AI-powered translation and enhance your inter
 
 Large Language Models like Claude excel at many tasks but may not provide optimal translations for all languages. By combining the DeepL API with the Model Context Protocol (MCP), you can provide Claude and other MCP-compatible clients with access to DeepL's specialized translation capabilities, resulting in more accurate translations across numerous languages.
 
-In this cookbook, we'll explore how to create an MCP server that connects DeepL's translation API with clients like Claude Desktop. This allows you to seamlessly translate text between languages within your conversations.
+In this cookbook, we'll explore how to create an MCP server that connects DeepL's translation API with clients like Claude Desktop. This allows you to seamlessly translate text between languages within your conversations. To look at the code and start using it, go to [GitHub](https://github.com/DeepLcom/deepl-mcp-server).
 
 ## Setting Up Your DeepL MCP Server
 
@@ -274,3 +274,10 @@ As you expand your server, consider adding more features like:
 - Caching to improve performance and reduce API usage
 
 The combination of specialized AI services (like DeepL) with general-purpose AI assistants (like Claude) through MCP creates powerful workflows that combine the strengths of different AI systems.
+
+## References
+
+- [DeepL API](https://www.deepl.com/pro-api)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+- [DeepL MCP Server GitHub](https://github.com/DeepLcom/deepl-mcp-server)
+- [Claude Desktop MCP Configuration](https://modelcontextprotocol.io/quickstart/server#testing-your-server-with-claude-for-desktop)
