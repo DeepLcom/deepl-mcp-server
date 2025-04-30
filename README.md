@@ -49,7 +49,7 @@ This MCP server integrates with Claude Desktop to provide translation capabiliti
   "mcpServers": {
     "deepl": {
       "command": "npx",
-      "args": ["-y", "deepl-mcp-server"],
+      "args": ["-y", "/path/to/deepl-mcp-server"],
       "env": {
         "DEEPL_API_KEY": "your-api-key-here"
       }
@@ -58,7 +58,7 @@ This MCP server integrates with Claude Desktop to provide translation capabiliti
 }
 ```
 
-4. Replace `/path/to/deepl-mcp-server` with the actual path to your local copy of this repository
+4. Replace `/path/to/deepl-mcp-server` with an **absolute path** to your local copy of this repository - for example, `/Users/robotwoman/Code/deepl-mcp-server`
 5. Replace `your-api-key-here` with your actual DeepL API key
 6. Restart Claude Desktop
 
