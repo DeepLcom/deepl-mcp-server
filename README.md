@@ -6,6 +6,10 @@
 
 A Model Context Protocol (MCP) server that provides translation capabilities using the DeepL API.
 
+<a href="https://glama.ai/mcp/servers/@DeepLcom/deepl-mcp-server">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@DeepLcom/deepl-mcp-server/badge" alt="DeepL Server MCP server" />
+</a>
+
 ## Features
 
 - Translate text between numerous languages
