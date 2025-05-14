@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/deeplcom-deepl-mcp-server-badge.png)](https://mseep.ai/app/deeplcom-deepl-mcp-server)
+
 # deepl-mcp-server
 
 [![Version](https://img.shields.io/npm/v/deepl-mcp-server.svg)](https://www.npmjs.org/package/deepl-mcp-server)
