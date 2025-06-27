@@ -4,6 +4,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as deepl from 'deepl-node';
+import { join, basename, extname } from 'path';
+import { tmpdir } from 'os';
 
 const DEEPL_API_KEY = process.env.DEEPL_API_KEY;
 const deeplClient = new deepl.DeepLClient(DEEPL_API_KEY);
@@ -30,8 +32,8 @@ async function getTargetLanguages() {
   return targetLanguagesCache;
 }
 
-// Helper function to validate languages
-async function validateLanguages(targetLang) {
+// Helper function to validate target languages
+async function validateTargetLanguage(targetLang) {
   const targetLanguages = await getTargetLanguages();
 
   if (!targetLanguages.some(lang => lang.code === targetLang)) {
@@ -39,6 +41,14 @@ async function validateLanguages(targetLang) {
   }
 }
 
+// Helper function to validate source languages
+async function validateSourceLanguage(sourceLang) {
+  const sourceLanguages = await getSourceLanguages();
+  
+  if (!sourceLanguages.some(lang => lang.code === sourceLang)) {
+    throw new Error(`Invalid source language: ${sourceLang}. Available languages: ${sourceLanguages.map(l => l.code).join(', ')}`);
+  }
+}
 
 // Create server instance
 const server = new McpServer({
@@ -109,7 +119,7 @@ server.tool(
   },
   async ({ text, targetLang, formality }) => {
     // Validate languages before translation
-    await validateLanguages(targetLang);
+    await validateTargetLanguage(targetLang);
 
     try {
       const result = await deeplClient.translateText(
@@ -189,6 +199,62 @@ server.tool(
       };
     } catch (error) {
       throw new Error(`Rephrasing failed: ${error.message}`);
+    }
+  }
+);
+
+server.tool(
+  "translate-document",
+  "Translate a document (file) from one language to another using DeepL API",
+  {
+    inputFile: z.string().describe("Path to the input file to be translated"),
+    sourceLang: z.string().optional().describe("Language code of the input file (if omitted, DeepL will auto-detect)"),
+    targetLang: z.string().describe("Target language code (e.g. 'en-US', 'de', 'fr')"),
+    formality: z
+        .enum(["less", "more", "default", "prefer_less", "prefer_more"])
+        .optional()
+        .describe(
+            "Controls whether translations should lean toward informal or formal language"
+        ),
+  },
+  async ({ inputFile, sourceLang, targetLang, formality }) => {
+    // Validate languages before translation
+    if (sourceLang) {
+      await validateSourceLanguage(sourceLang);
+    }
+    await validateTargetLanguage(targetLang);
+
+    const fileExtension = extname(inputFile);
+    const fileNameWithoutExt = basename(inputFile, fileExtension);
+    const tmpOutputFile = join(tmpdir(), `${fileNameWithoutExt} ${targetLang}${fileExtension}`);
+
+    try {
+      await deeplClient.translateDocument(
+          inputFile,
+          tmpOutputFile,
+          // @ts-ignore
+          sourceLang ?? null,
+          targetLang,
+          { formality }
+      );
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Document successfully translated and saved to: ${tmpOutputFile}`,
+          },
+        ],
+      };
+    } catch (error) {
+      if (error.documentHandle) {
+        const handle = error.documentHandle;
+        throw new Error(
+            `Translation failed after document upload. Document ID: ${handle.documentId}, ` +
+            `Document key: ${handle.documentKey}. Original error: ${error.message}`
+        );
+      }
+      throw new Error(`Document translation failed: ${error.message}`);
     }
   }
 );
