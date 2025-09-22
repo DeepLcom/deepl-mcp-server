@@ -1,25 +1,5 @@
 # Thanks to https://github.com/15Dkatz/official_joke_api !
-
-### Setup (assuming you have `uv`)
-#
-# uv sync
-# source .venv/bin/activate
-#
-# To start with, all you need is the stuff above the "Tools" comment below,
-# the first tool, and the final two lines that end with `mcp.run()`.
-# That's a complete MCP server that simply tells the same joke every time.
-#
-# You can then add the rest of the tools below, one by one or all at once.
-#
-# We've included type hints here, using docstrings, `typing`, and Pydantic.
-# If you want to make this even simpler, you can leave those out.
-# So, for example, `get_joke_by_id()` could just be:
-#
-# @mcp.tool
-# def get_joke_by_id(id):
-#   response = requests.get(f"{API_BASE_URL}/jokes/{id}")
-#   json = response.json()
-#   return extract_joke(json)
+# Please see README.md for isntructions and additional info.
 
 import requests
 from fastmcp import FastMCP
