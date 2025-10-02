@@ -1,0 +1,17 @@
+{
+  "name": "jokes",
+  "version": "1.0.0",
+  "main": "jokes.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.1",
+    "axios": "^1.10.0",
+    "zod": "^3.25.67"
+  }
+}
