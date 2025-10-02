@@ -1,6 +1,6 @@
 # Jokes MCP server: Python edition
 ## About
-We made this Jokes server to help you learn how to make an MCP server of your very own. And so we made this as simple as we could. You don't even need a key to use the Official Joke API; all you have to do is construct the appropriate URL for each endpoint.
+We made this Jokes server to help you learn how to make an MCP server of your very own. And so we made this as simple as we could. You don't even need an API key to use the Official Joke API; all you have to do is construct the appropriate URL for each endpoint.
 
 ### The tools
 
@@ -30,6 +30,7 @@ def get_joke_by_id(id):
 ```
 
 ### Error checking
+
 To keep the code small, we've only included minimal error checking. For example, we've omitted anything which checks whether API calls have succeeded. You'd want to add such error-checking before using this in the real world. And it certainly helps with debugging.
 
 ## Setup using uv
