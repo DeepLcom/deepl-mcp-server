@@ -134,3 +134,9 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Python things: uv!
+.python-version
+uv.lock
+.venv/
+__pycache__/
