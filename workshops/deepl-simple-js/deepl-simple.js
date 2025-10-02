@@ -9,6 +9,8 @@ npm install @modelcontextprotocol/sdk zod axios deepl-node
 /*** Do basic setup. We'll start our server off with no resources or tools. 
  *   We'll add those later. */
 
+//TODO: add new mcpTextContentify()
+
 const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const z = require('zod');
@@ -100,7 +102,7 @@ async function translateText({text, targetLang, formality}) {
   }
 }
 
-// Helper function which embeds a string in the object structure MCP expects
+// Helper function which wraps a string or strings in the object structure MCP expects
 function mcpTextContentify(strings) {
   const contentObjects = strings.map(
     str => ({
