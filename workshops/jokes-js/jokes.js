@@ -116,7 +116,7 @@ function extractJoke(json) {
 // Accept either a string or an array of strings, with partial error checking
 function mcpTextContentify(param) {
   if (typeof(param) != 'string' && !Array.isArray(param)) {
-    handleJokeFetchError('mcpTextContentify expects a string or an array of strings');
+    handleJokeFetchError('mcpTextContentify() expects a string or an array of strings');
   }
 
   let strings = typeof(param) == 'string' ? [param] : param;
