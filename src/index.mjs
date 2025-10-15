@@ -60,21 +60,10 @@ const server = new McpServer({
 server.tool(
   "get-source-languages",
   "Get list of available source languages for translation",
-  {},
   async () => {
     try {
       const languages = await getSourceLanguages();
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(languages.map(lang => ({
-              code: lang.code,
-              name: lang.name
-            })), null, 2),
-          },
-        ],
-      };
+      return mcpContentifyText(languages.map(JSON.stringify)); 
     } catch (error) {
       throw new Error(`Failed to get source languages: ${error.message}`);
     }
@@ -84,22 +73,10 @@ server.tool(
 server.tool(
   "get-target-languages",
   "Get list of available target languages for translation",
-  {},
   async () => {
     try {
       const languages = await getTargetLanguages();
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(languages.map(lang => ({
-              code: lang.code,
-              name: lang.name,
-              supportsFormality: lang.supportsFormality
-            })), null, 2),
-          },
-        ],
-      };
+      return mcpContentifyText(languages.map(JSON.stringify));
     } catch (error) {
       throw new Error(`Failed to get target languages: ${error.message}`);
     }
@@ -125,18 +102,10 @@ server.tool(
         /** @type {import('deepl-node').TargetLanguageCode} */(targetLang),
         { formality }
       );
-      return {
-        content: [
-          {
-            type: "text",
-            text: result.text,
-          },
-          {
-            type: "text",
-            text: `Detected source language: ${result.detectedSourceLang}`,
-          },
-        ],
-      };
+      return mcpContentifyText([
+        result.text,
+        `Detected source language: ${result.detectedSourceLang}`
+      ]);
     } catch (error) {
       throw new Error(`Translation failed: ${error.message}`);
     }
@@ -146,23 +115,16 @@ server.tool(
 server.tool(
   "get-writing-styles-and-tones",
   "Get list of available writing styles and tones for rephrasing",
-  {},
   async () => {
     try {
       const writingStyles = Object.values(WritingStyle);
       const writingTones = Object.values(WritingTone);
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({
-              writingStyles,
-              writingTones,
-            }, null, 2),
-          },
-        ],
-      };
+      const stringifiedJSON = JSON.stringify(
+        { writingStyles, writingTones }, null, 2
+      );
+
+      return mcpContentifyText(stringifiedJSON);
     } catch (error) {
       throw new Error(`Failed to get writing styles and tones: ${error.message}`);
     }
@@ -186,14 +148,7 @@ server.tool(
         tone
       );
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: result.text,
-          },
-        ],
-      };
+      return mcpContentifyText(result.text);
     } catch (error) {
       throw new Error(`Rephrasing failed: ${error.message}`);
     }
@@ -231,27 +186,40 @@ server.tool(
         { formality }
       );
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Document translated successfully! Status: ${result.status}`,
-          },
-          {
-            type: "text",
-            text: `Characters billed: ${result.billedCharacters}`,
-          },
-          {
-            type: "text",
-            text: `Output file: ${outputFile}`,
-          },
-        ],
-      };
+      return mcpContentifyText([
+        `Document translated successfully! Status: ${result.status}`,
+        `Characters billed: ${result.billedCharacters}`,
+        `Output file: ${outputFile}`
+      ]);
     } catch (error) {
       throw new Error(`Document translation failed: ${error.message}`);
     }
   }
 );
+
+
+/*** Helper functions ***/
+
+// Helper function which wraps a string or strings in the object structure MCP expects
+// Accept either a string or an array of strings, with partial error checking
+function mcpContentifyText(param) {
+  if (typeof(param) != 'string' && !Array.isArray(param)) {
+    throw new Error('mcpContentifyText() expects a string or an array of strings');
+  }
+
+  const strings = typeof(param) == 'string' ? [param] : param;
+
+  const contentObjects = strings.map(
+    str => ({
+        type: "text",
+        text: str
+      })
+  );
+
+  return {
+    content: contentObjects
+  };
+}
 
 async function main() {
   const transport = new StdioServerTransport();

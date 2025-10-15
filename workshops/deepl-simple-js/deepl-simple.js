@@ -103,7 +103,14 @@ async function translateText({text, targetLang, formality}) {
 }
 
 // Helper function which wraps a string or strings in the object structure MCP expects
-function mcpTextContentify(strings) {
+// Accept either a string or an array of strings, with partial error checking
+function mcpTextContentify(param) {
+  if (typeof(param) != 'string' && !Array.isArray(param)) {
+    throw new Error('mcpTextContentify() expects a string or an array of strings');
+  }
+
+  const strings = typeof(param) == 'string' ? [param] : param;
+
   const contentObjects = strings.map(
     str => ({
         type: "text",
