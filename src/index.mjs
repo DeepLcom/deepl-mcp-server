@@ -63,7 +63,7 @@ server.tool(
   async () => {
     try {
       const languages = await getSourceLanguages();
-      return mcpTextContentify(languages.map(JSON.stringify)); 
+      return mcpContentifyText(languages.map(JSON.stringify)); 
     } catch (error) {
       throw new Error(`Failed to get source languages: ${error.message}`);
     }
@@ -76,7 +76,7 @@ server.tool(
   async () => {
     try {
       const languages = await getTargetLanguages();
-      return mcpTextContentify(languages.map(JSON.stringify));
+      return mcpContentifyText(languages.map(JSON.stringify));
     } catch (error) {
       throw new Error(`Failed to get target languages: ${error.message}`);
     }
@@ -102,7 +102,7 @@ server.tool(
         /** @type {import('deepl-node').TargetLanguageCode} */(targetLang),
         { formality }
       );
-      return mcpTextContentify([
+      return mcpContentifyText([
         result.text,
         `Detected source language: ${result.detectedSourceLang}`
       ]);
@@ -124,7 +124,7 @@ server.tool(
         { writingStyles, writingTones }, null, 2
       );
 
-      return mcpTextContentify(stringifiedJSON);
+      return mcpContentifyText(stringifiedJSON);
     } catch (error) {
       throw new Error(`Failed to get writing styles and tones: ${error.message}`);
     }
@@ -148,7 +148,7 @@ server.tool(
         tone
       );
 
-      return mcpTextContentify(result.text);
+      return mcpContentifyText(result.text);
     } catch (error) {
       throw new Error(`Rephrasing failed: ${error.message}`);
     }
@@ -186,7 +186,7 @@ server.tool(
         { formality }
       );
 
-      return mcpTextContentify([
+      return mcpContentifyText([
         `Document translated successfully! Status: ${result.status}`,
         `Characters billed: ${result.billedCharacters}`,
         `Output file: ${outputFile}`
@@ -202,9 +202,9 @@ server.tool(
 
 // Helper function which wraps a string or strings in the object structure MCP expects
 // Accept either a string or an array of strings, with partial error checking
-function mcpTextContentify(param) {
+function mcpContentifyText(param) {
   if (typeof(param) != 'string' && !Array.isArray(param)) {
-    throw new Error('mcpTextContentify() expects a string or an array of strings');
+    throw new Error('mcpContentifyText() expects a string or an array of strings');
   }
 
   const strings = typeof(param) == 'string' ? [param] : param;
