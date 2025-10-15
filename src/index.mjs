@@ -13,6 +13,9 @@ const deeplClientOptions = {
   },
 };
 
+// Descriptive text that we'll reuse in our tools
+const languageCodeDescription = "language code, in standard ISO-639-1 format (e.g. 'en-US', 'de', 'fr')";
+
 const deeplClient = new deepl.DeepLClient(DEEPL_API_KEY, deeplClientOptions);
 
 // Import WritingStyle and WritingTone enums
@@ -38,11 +41,13 @@ async function getTargetLanguages() {
 }
 
 // Helper function to validate languages
-async function validateLanguages(targetLang) {
+// Since we store our target language codes as lowercase, convert any incoming language code to lowercase too.
+async function validateLanguages(targetLangCode) {
   const targetLanguages = await getTargetLanguages();
+  const lowercaseLangCode = targetLangCode.toLowerCase();
 
-  if (!targetLanguages.some(lang => lang.code === targetLang)) {
-    throw new Error(`Invalid target language: ${targetLang}. Available languages: ${targetLanguages.map(l => l.code).join(', ')}`);
+  if (!targetLanguages.some(lang => lang.code === lowercaseLangCode)) {
+    throw new Error(`Invalid target language: ${lowercaseLangCode}. Available languages: ${targetLanguages.map(l => l.code).join(', ')}`);
   }
 }
 
@@ -88,18 +93,18 @@ server.tool(
   "Translate text to a target language using DeepL API",
   {
     text: z.string().describe("Text to translate"),
-    targetLang: z.string().describe("Target language code (e.g. 'en-US', 'de', 'fr')"),
+    targetLangCode: z.string().describe('target ' + languageCodeDescription),
     formality: z.enum(['less', 'more', 'default', 'prefer_less', 'prefer_more']).optional().describe("Controls whether translations should lean toward informal or formal language"),
   },
-  async ({ text, targetLang, formality }) => {
+  async ({ text, targetLangCode, formality }) => {
     // Validate languages before translation
-    await validateLanguages(targetLang);
+    await validateLanguages(targetLangCode);
 
     try {
       const result = await deeplClient.translateText(
         text,
         null,
-        /** @type {import('deepl-node').TargetLanguageCode} */(targetLang),
+        /** @type {import('deepl-node').TargetLanguageCode} */(targetLangCode),
         { formality }
       );
       return mcpContentifyText([
@@ -161,20 +166,20 @@ server.tool(
   {
     inputFile: z.string().describe("Path to the input document file to translate"),
     outputFile: z.string().optional().describe("Path where the translated document will be saved (if not provided, will be auto-generated)"),
-    targetLang: z.string().describe("Target language code (e.g. 'en-US', 'de', 'fr')"),
-    sourceLang: z.string().optional().describe("Source language code, or leave empty for auto-detection"),
+    targetLangCode: z.string().describe('target ' + languageCodeDescription),
+    sourceLang: z.string().optional().describe(`source ${languageCodeDescription}, or leave empty for auto-detection`),
     formality: z.enum(['less', 'more', 'default', 'prefer_less', 'prefer_more']).optional().describe("Controls whether translations should lean toward informal or formal language"),
   },
-  async ({ inputFile, outputFile, targetLang, sourceLang, formality }) => {
+  async ({ inputFile, outputFile, targetLangCode, sourceLang, formality }) => {
     // Validate target language
-    await validateLanguages(targetLang);
+    await validateLanguages(targetLangCode);
 
     // Generate output file name if not provided
     if (!outputFile) {
       const path = await import('path');
       const parsed = path.parse(inputFile);
-      const targetLangCode = targetLang.split('-')[0]; // Get language code without region (e.g., 'en' from 'en-US')
-      outputFile = path.join(parsed.dir, `${parsed.name}_${targetLangCode}${parsed.ext}`);
+      const langCodeSet1 = targetLangCode.split('-')[0]; // Get language code without region (e.g., 'en' from 'en-US')
+      outputFile = path.join(parsed.dir, `${parsed.name}_${langCodeSet1}${parsed.ext}`);
     }
 
     try {
@@ -182,7 +187,7 @@ server.tool(
         inputFile,
         outputFile,
         sourceLang ? /** @type {import('deepl-node').SourceLanguageCode} */(sourceLang) : null,
-        /** @type {import('deepl-node').TargetLanguageCode} */(targetLang),
+        /** @type {import('deepl-node').TargetLanguageCode} */(targetLangCode),
         { formality }
       );
 
