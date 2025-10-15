@@ -177,9 +177,9 @@ server.tool(
     // Generate output file name if not provided
     if (!outputFile) {
       const path = await import('path');
-      const parsed = path.parse(inputFile);
+      const parsedPath = path.parse(inputFile);
       const langCodeSet1 = targetLangCode.split('-')[0]; // Get language code without region (e.g., 'en' from 'en-US')
-      outputFile = path.join(parsed.dir, `${parsed.name}_${langCodeSet1}${parsed.ext}`);
+      outputFile = path.join(parsedPath.dir, `${parsedPath.name}_${langCodeSet1}${parsedPath.ext}`);
     }
 
     try {
