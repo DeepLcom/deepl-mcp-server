@@ -13,7 +13,7 @@ const deeplClientOptions = {
   },
 };
 
-// Descriptive text that we'll reuse in our tools
+// Descriptive text for reuse in our tools
 const languageCodeDescription = "language code, in standard ISO-639-1 format (e.g. 'en-US', 'de', 'fr')";
 
 const deeplClient = new deepl.DeepLClient(DEEPL_API_KEY, deeplClientOptions);
@@ -50,7 +50,9 @@ async function validateLanguages(targetLangCode) {
     throw new Error(`Invalid target language: ${lowercaseLangCode}. Available languages: ${targetLanguages.map(l => l.code).join(', ')}`);
   }
 }
-
+/*--------------------------------------------------------------------
+ *  Server tools
+ *-------------------------------------------------------------------*/
 
 // Create server instance
 const server = new McpServer({
@@ -92,25 +94,7 @@ server.tool(
     targetLangCode: z.string().describe('target ' + languageCodeDescription),
     formality: z.enum(['less', 'more', 'default', 'prefer_less', 'prefer_more']).optional().describe("Controls whether translations should lean toward informal or formal language"),
   },
-  async ({ text, targetLangCode, formality }) => {
-    // Validate languages before translation
-    await validateLanguages(targetLangCode);
-
-    try {
-      const result = await deeplClient.translateText(
-        text,
-        null,
-        /** @type {import('deepl-node').TargetLanguageCode} */(targetLangCode),
-        { formality }
-      );
-      return mcpContentifyText([
-        result.text,
-        `Detected source language: ${result.detectedSourceLang}`
-      ]);
-    } catch (error) {
-      throw new Error(`Translation failed: ${error.message}`);
-    }
-  }
+  translateText
 );
 
 server.tool(
@@ -140,20 +124,7 @@ server.tool(
     style: z.nativeEnum(WritingStyle).optional().describe("Writing style for rephrasing"),
     tone: z.nativeEnum(WritingTone).optional().describe("Writing tone for rephrasing")
   },
-  async ({ text, style, tone }) => {
-    try {
-      const result = await deeplClient.rephraseText(
-        text,
-        null,
-        style,
-        tone
-      );
-
-      return mcpContentifyText(result.text);
-    } catch (error) {
-      throw new Error(`Rephrasing failed: ${error.message}`);
-    }
-  }
+  rephraseText
 );
 
 server.tool(
@@ -166,40 +137,80 @@ server.tool(
     sourceLang: z.string().optional().describe(`source ${languageCodeDescription}, or leave empty for auto-detection`),
     formality: z.enum(['less', 'more', 'default', 'prefer_less', 'prefer_more']).optional().describe("Controls whether translations should lean toward informal or formal language"),
   },
-  async ({ inputFile, outputFile, targetLangCode, sourceLang, formality }) => {
-    // Validate target language
-    await validateLanguages(targetLangCode);
-
-    // Generate output file name if not provided
-    if (!outputFile) {
-      const path = await import('path');
-      const parsedPath = path.parse(inputFile);
-      const langCodeSet1 = targetLangCode.split('-')[0]; // Get language code without region (e.g., 'en' from 'en-US')
-      outputFile = path.join(parsedPath.dir, `${parsedPath.name}_${langCodeSet1}${parsedPath.ext}`);
-    }
-
-    try {
-      const result = await deeplClient.translateDocument(
-        inputFile,
-        outputFile,
-        sourceLang ? /** @type {import('deepl-node').SourceLanguageCode} */(sourceLang) : null,
-        /** @type {import('deepl-node').TargetLanguageCode} */(targetLangCode),
-        { formality }
-      );
-
-      return mcpContentifyText([
-        `Document translated successfully! Status: ${result.status}`,
-        `Characters billed: ${result.billedCharacters}`,
-        `Output file: ${outputFile}`
-      ]);
-    } catch (error) {
-      throw new Error(`Document translation failed: ${error.message}`);
-    }
-  }
+  translateDocument
 );
 
 
-/*** Helper functions ***/
+/*--------------------------------------------------------------------
+ *  Server tool callback functions
+ *-------------------------------------------------------------------*/
+
+// The type assertion below asserts that the API will return a single result, not an array of results
+async function translateText ({ text, targetLangCode, formality }) {
+  // Validate languages before translation
+  await validateLanguages(targetLangCode);
+
+  try {
+    const result = await deeplClient.translateText(text, null, targetLangCode, { formality });
+    const translation = /** @type {import('deepl-node').TextResult} */ (result);
+    
+    return mcpContentifyText([
+      translation.text,
+      `Detected source language: ${translation.detectedSourceLang}`
+    ]);
+
+  } catch (error) {
+    throw new Error(`Translation failed: ${error.message}`);
+  }
+}
+
+// The type assertion below asserts that the API will return a single result, not an array of results
+async function rephraseText({ text, style, tone }) {
+  try {
+    const result = await deeplClient.rephraseText(text, null, style, tone);
+    const translation = /** @type {import('deepl-node').WriteResult} */ (result);
+    return mcpContentifyText(translation.text);
+
+  } catch (error) {
+    throw new Error(`Rephrasing failed: ${error.message}`);
+  }
+}
+
+async function translateDocument ({ inputFile, outputFile, targetLangCode, sourceLang, formality }) {
+  // Validate target language
+  await validateLanguages(targetLangCode);
+
+  // Generate output file name if not provided
+  if (!outputFile) {
+    const path = await import('path');
+    const parsedPath = path.parse(inputFile);
+    const langCodeSet1 = targetLangCode.split('-')[0]; // Get language code without region (e.g., 'en' from 'en-US')
+    outputFile = path.join(parsedPath.dir, `${parsedPath.name}_${langCodeSet1}${parsedPath.ext}`);
+  }
+
+  try {
+    const result = await deeplClient.translateDocument(
+      inputFile,
+      outputFile,
+      sourceLang ? /** @type {import('deepl-node').SourceLanguageCode} */(sourceLang) : null,
+      /** @type {import('deepl-node').TargetLanguageCode} */(targetLangCode),
+      { formality }
+    );
+
+    return mcpContentifyText([
+      `Document translated successfully! Status: ${result.status}`,
+      `Characters billed: ${result.billedCharacters}`,
+      `Output file: ${outputFile}`
+    ]);
+  } catch (error) {
+    throw new Error(`Document translation failed: ${error.message}`);
+  }
+}
+
+
+/*--------------------------------------------------------------------
+ *  Helper functions
+ *-------------------------------------------------------------------*/
 
 // Helper function which wraps a string or strings in the object structure MCP expects
 // Accept either a string or an array of strings, with partial error checking
