@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+/*--------------------------------------------------------------------
+ *  Imports and constants
+ *-------------------------------------------------------------------*/
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -16,74 +20,88 @@ const deeplClientOptions = {
 // Descriptive text for reuse in our tools
 const languageCodeDescription = "language code, in standard ISO-639-1 format (e.g. 'en-US', 'de', 'fr')";
 
-const deeplClient = new deepl.DeepLClient(DEEPL_API_KEY, deeplClientOptions);
 
-// Import WritingStyle and WritingTone enums
-const WritingStyle = deepl.WritingStyle;
-const WritingTone = deepl.WritingTone;
-
-// Cache for language lists
-let sourceLanguagesCache = null;
-let targetLanguagesCache = null;
-
-async function getSourceLanguages() {
-  if (!sourceLanguagesCache) {
-    sourceLanguagesCache = await deeplClient.getSourceLanguages();
-  }
-  return sourceLanguagesCache;
-}
-
-async function getTargetLanguages() {
-  if (!targetLanguagesCache) {
-    targetLanguagesCache = await deeplClient.getTargetLanguages();
-  }
-  return targetLanguagesCache;
-}
-
-// Helper function to validate languages
-// Since we store our target language codes as lowercase, convert any incoming language code to lowercase too.
-async function validateLanguages(targetLangCode) {
-  const targetLanguages = await getTargetLanguages();
-  const lowercaseLangCode = targetLangCode.toLowerCase();
-
-  if (!targetLanguages.some(lang => lang.code === lowercaseLangCode)) {
-    throw new Error(`Invalid target language: ${lowercaseLangCode}. Available languages: ${targetLanguages.map(l => l.code).join(', ')}`);
-  }
-}
 /*--------------------------------------------------------------------
- *  Server tools
+ *  Set up DeepL things
  *-------------------------------------------------------------------*/
 
-// Create server instance
+const deeplClient = new deepl.DeepLClient(DEEPL_API_KEY, deeplClientOptions);
+
+// Import WritingStyle and WritingTone enums from DeepL, and transform each to arrays of strings
+const writingStyles = Object.values(deepl.WritingStyle);
+const writingTones = Object.values(deepl.WritingTone);
+
+const formalityTypes = ['less', 'more', 'default', 'prefer_less', 'prefer_more'];
+
+console.error("writingStyles is", writingStyles);
+console.error("writingTones is", writingTones);
+
+/**
+ * Class to handle a list of languages and associated ISO-639 codes.
+ * We normalize all language codes to lowercase, 
+ * so that lowercase/uppercase differences don't inspire mistakes.
+ * 
+ * @property {Array<{name: string, code: string}>} list
+ * @property {string} codesList - Comma-separated list of all language codes
+ */
+
+class LanguagesList {
+  constructor(list) {    
+    this.list = list;
+    this.codesList = list.map(lang => lang.code).join(', ');
+  }
+
+  static async create(type) {
+    if (type != 'source' && type !== 'target') {
+      throw new Error('LanguagesList needs to be called with target or source');
+    }
+
+    const method = type === 'source' ? 'getSourceLanguages' : 'getTargetLanguages';
+    const langs = await deeplClient[method]();
+    const lowerCaseLangs = langs.map(({ name, code }) => ({ name, code: code.toLowerCase() }));
+    return new LanguagesList(lowerCaseLangs);
+  }
+
+  /**
+   * Given an ISO-639 language code, throw an error if it's not in our codes list
+   * @param {string} code
+   */
+  validate(code) {
+    const lowerCode = code.toLowerCase();
+
+    if (!this.list.some(lang => lang.code === lowerCode)) {
+      throw new Error(`Invalid language code: ${lowerCode}. Available codes: ${this.codesList}`);
+    }
+  }
+}
+
+const sourceLanguages = await LanguagesList.create('source');
+const targetLanguages = await LanguagesList.create('target');
+
+/*--------------------------------------------------------------------
+ *  Create MCP server
+ *-------------------------------------------------------------------*/
+
 const server = new McpServer({
   name: "deepl",
   version: "1.0.0"
 });
 
+
+/*--------------------------------------------------------------------
+ *  Server tools
+ *-------------------------------------------------------------------*/
+
 server.tool(
   "get-source-languages",
   "Get list of available source languages for translation",
-  async () => {
-    try {
-      const languages = await getSourceLanguages();
-      return mcpContentifyText(languages.map(JSON.stringify)); 
-    } catch (error) {
-      throw new Error(`Failed to get source languages: ${error.message}`);
-    }
-  }
+  getSourceLanguages
 );
 
 server.tool(
   "get-target-languages",
   "Get list of available target languages for translation",
-  async () => {
-    try {
-      const languages = await getTargetLanguages();
-      return mcpContentifyText(languages.map(JSON.stringify));
-    } catch (error) {
-      throw new Error(`Failed to get target languages: ${error.message}`);
-    }
-  }
+  getTargetLanguages
 );
 
 server.tool(
@@ -92,28 +110,21 @@ server.tool(
   {
     text: z.string().describe("Text to translate"),
     targetLangCode: z.string().describe('target ' + languageCodeDescription),
-    formality: z.enum(['less', 'more', 'default', 'prefer_less', 'prefer_more']).optional().describe("Controls whether translations should lean toward informal or formal language"),
+    formality: z.enum(formalityTypes).optional().describe("Controls whether translations should lean toward informal or formal language"),
   },
   translateText
 );
 
 server.tool(
-  "get-writing-styles-and-tones",
-  "Get list of available writing styles and tones for rephrasing",
-  async () => {
-    try {
-      const writingStyles = Object.values(WritingStyle);
-      const writingTones = Object.values(WritingTone);
+  "get-writing-styles",
+  "Get list of writing styles the DeepL API can use while rephrasing text",
+  getWritingStyles
+);
 
-      const stringifiedJSON = JSON.stringify(
-        { writingStyles, writingTones }, null, 2
-      );
-
-      return mcpContentifyText(stringifiedJSON);
-    } catch (error) {
-      throw new Error(`Failed to get writing styles and tones: ${error.message}`);
-    }
-  }
+server.tool(
+  "get-writing-tones",
+  "Get list of writing tones the DeepL API can use while rephrasing text",
+  getWritingTones
 );
 
 server.tool(
@@ -121,8 +132,8 @@ server.tool(
   "Rephrase text in the same language using DeepL API",
   {
     text: z.string().describe("Text to rephrase"),
-    style: z.nativeEnum(WritingStyle).optional().describe("Writing style for rephrasing"),
-    tone: z.nativeEnum(WritingTone).optional().describe("Writing tone for rephrasing")
+    style: z.enum(writingStyles).optional().describe("Writing style for rephrasing"),
+    tone: z.enum(writingTones).optional().describe("Writing tone for rephrasing")
   },
   rephraseText
 );
@@ -145,10 +156,26 @@ server.tool(
  *  Server tool callback functions
  *-------------------------------------------------------------------*/
 
+async function getSourceLanguages() {
+  try {
+    return mcpContentifyText(sourceLanguages.list.map(JSON.stringify)); 
+  } catch (error) {
+    throw new Error(`Failed to get source languages: ${error.message}`);
+  }
+}
+
+async function getTargetLanguages() {
+  try {
+    return mcpContentifyText(targetLanguages.list.map(JSON.stringify));
+  } catch (error) {
+    throw new Error(`Failed to get target languages: ${error.message}`);
+  }
+}
+
 // The type assertion below asserts that the API will return a single result, not an array of results
 async function translateText ({ text, targetLangCode, formality }) {
   // Validate languages before translation
-  await validateLanguages(targetLangCode);
+  targetLanguages.validate(targetLangCode);
 
   try {
     const result = await deeplClient.translateText(text, null, targetLangCode, { formality });
@@ -176,9 +203,25 @@ async function rephraseText({ text, style, tone }) {
   }
 }
 
+async function getWritingStyles() {
+  try {
+    return mcpContentifyText(writingStyles);
+  } catch (error) {
+    throw new Error(`Failed to get writing styles and tones: ${error.message}`);
+  }
+}
+
+async function getWritingTones() {
+  try {
+    return mcpContentifyText(writingTones);
+  } catch (error) {
+    throw new Error(`Failed to get writing styles and tones: ${error.message}`);
+  }
+}
+
 async function translateDocument ({ inputFile, outputFile, targetLangCode, sourceLang, formality }) {
   // Validate target language
-  await validateLanguages(targetLangCode);
+  targetLanguages.validate(targetLangCode);
 
   // Generate output file name if not provided
   if (!outputFile) {
@@ -212,14 +255,16 @@ async function translateDocument ({ inputFile, outputFile, targetLangCode, sourc
  *  Helper functions
  *-------------------------------------------------------------------*/
 
-// Helper function which wraps a string or strings in the object structure MCP expects
-// Accept either a string or an array of strings, with partial error checking
+/**
+ * Helper function which wraps a string or strings in the object structure MCP expects
+ * @param {string | string[]} param
+ */
 function mcpContentifyText(param) {
   if (typeof(param) != 'string' && !Array.isArray(param)) {
     throw new Error('mcpContentifyText() expects a string or an array of strings');
   }
 
-  const strings = typeof(param) == 'string' ? [param] : param;
+  const strings = typeof(param) === 'string' ? [param] : param;
 
   const contentObjects = strings.map(
     str => ({
@@ -232,6 +277,10 @@ function mcpContentifyText(param) {
     content: contentObjects
   };
 }
+
+/*--------------------------------------------------------------------
+ *  Main MCP functionality
+ *-------------------------------------------------------------------*/
 
 async function main() {
   const transport = new StdioServerTransport();
