@@ -1,7 +1,7 @@
 [project]
 name = "jokes-python"
 version = "0.1.0"
-description = "Add your description here"
+description = "Jokes server, in python, for learning MCP"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
