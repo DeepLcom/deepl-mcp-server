@@ -20,11 +20,7 @@ const consistentJoke = "What's brown and sticky?\nA stick! Ha ha ha ha";
 
 const server = new McpServer({
   name: "jokes",
-  version: "1.0.0",
-  capabilities: {
-    resources: {},
-    tools: {}
-  },
+  version: "1.0.0"
 });
 
 /*** Add tools to our server ***/

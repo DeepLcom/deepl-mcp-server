@@ -23,11 +23,7 @@ const deeplClient = new deepl.DeepLClient(process.env.DEEPL_API_KEY);
 // Make an empty MCP server.
 const server = new McpServer({
   name: "deepl-simple",
-  version: "1.0.0",
-  capabilities: {
-    resources: {},
-    tools: {}
-  },
+  version: "1.0.0"
 });
 
 
