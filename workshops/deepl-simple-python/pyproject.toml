@@ -1,0 +1,10 @@
+[project]
+name = "deepl-simple-python"
+version = "0.1.0"
+description = "Simple DeepL MCP server for learning purposes"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "deepl>=1.22.0",
+    "fastmcp>=2.11.0"
+]
