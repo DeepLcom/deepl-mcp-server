@@ -5,6 +5,6 @@ description = "Jokes server, in python, for learning MCP"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "fastmcp==2.11.0",
+    "fastmcp>=2.13.0",
     "pydantic>=2.11.7",
 ]
