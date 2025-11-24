@@ -111,6 +111,7 @@ server.tool(
     text: z.string().describe("Text to translate"),
     targetLangCode: z.string().describe('target ' + languageCodeDescription),
     formality: z.enum(formalityTypes).optional().describe("Controls whether translations should lean toward informal or formal language"),
+    glossaryId: z.string().optional().describe("ID of glossary to use for translation"),
   },
   translateText
 );
@@ -147,8 +148,35 @@ server.tool(
     targetLangCode: z.string().describe('target ' + languageCodeDescription),
     sourceLang: z.string().optional().describe(`source ${languageCodeDescription}, or leave empty for auto-detection`),
     formality: z.enum(['less', 'more', 'default', 'prefer_less', 'prefer_more']).optional().describe("Controls whether translations should lean toward informal or formal language"),
+    glossaryId: z.string().optional().describe("ID of glossary to use for translation"),
   },
   translateDocument
+);
+
+server.tool(
+  "list-glossaries",
+  "Get list of all available glossaries (both v2 monolingual and v3 multilingual)",
+  listGlossaries
+);
+
+server.tool(
+  "get-glossary",
+  "Get detailed information about a specific glossary by ID",
+  {
+    glossaryId: z.string().describe("The unique identifier of the glossary")
+  },
+  getGlossary
+);
+
+server.tool(
+  "get-glossary-entries",
+  "Get the term entries from a specific glossary. For v3 multilingual glossaries, you must specify source and target language codes.",
+  {
+    glossaryId: z.string().describe("The unique identifier of the glossary"),
+    sourceLang: z.string().optional().describe(`source ${languageCodeDescription} (required for v3 multilingual glossaries)`),
+    targetLang: z.string().optional().describe(`target ${languageCodeDescription} (required for v3 multilingual glossaries)`)
+  },
+  getGlossaryEntries
 );
 
 
@@ -173,14 +201,19 @@ async function getTargetLanguages() {
 }
 
 // The type assertion below asserts that the API will return a single result, not an array of results
-async function translateText ({ text, targetLangCode, formality }) {
+async function translateText ({ text, targetLangCode, formality, glossaryId }) {
   // Validate languages before translation
   targetLanguages.validate(targetLangCode);
 
   try {
-    const result = await deeplClient.translateText(text, null, targetLangCode, { formality });
+    const options = { formality };
+    if (glossaryId) {
+      options.glossary = glossaryId;
+    }
+
+    const result = await deeplClient.translateText(text, null, targetLangCode, options);
     const translation = /** @type {import('deepl-node').TextResult} */ (result);
-    
+
     return mcpContentifyText([
       translation.text,
       `Detected source language: ${translation.detectedSourceLang}`
@@ -219,7 +252,7 @@ async function getWritingTones() {
   }
 }
 
-async function translateDocument ({ inputFile, outputFile, targetLangCode, sourceLang, formality }) {
+async function translateDocument ({ inputFile, outputFile, targetLangCode, sourceLang, formality, glossaryId }) {
   // Validate target language
   targetLanguages.validate(targetLangCode);
 
@@ -232,12 +265,17 @@ async function translateDocument ({ inputFile, outputFile, targetLangCode, sourc
   }
 
   try {
+    const options = { formality };
+    if (glossaryId) {
+      options.glossary = glossaryId;
+    }
+
     const result = await deeplClient.translateDocument(
       inputFile,
       outputFile,
       sourceLang ? /** @type {import('deepl-node').SourceLanguageCode} */(sourceLang) : null,
       /** @type {import('deepl-node').TargetLanguageCode} */(targetLangCode),
-      { formality }
+      options
     );
 
     return mcpContentifyText([
@@ -247,6 +285,136 @@ async function translateDocument ({ inputFile, outputFile, targetLangCode, sourc
     ]);
   } catch (error) {
     throw new Error(`Document translation failed: ${error.message}`);
+  }
+}
+
+async function listGlossaries() {
+  try {
+    const [v2Glossaries, v3Glossaries] = await Promise.all([
+      deeplClient.listGlossaries(),
+      deeplClient.listMultilingualGlossaries()
+    ]);
+
+    const results = [];
+
+    if (v2Glossaries.length > 0) {
+      results.push("=== V2 Monolingual Glossaries ===");
+      v2Glossaries.forEach(glossary => {
+        results.push(JSON.stringify({
+          id: glossary.glossaryId,
+          name: glossary.name,
+          sourceLang: glossary.sourceLang,
+          targetLang: glossary.targetLang,
+          entryCount: glossary.entryCount,
+          creationTime: glossary.creationTime
+        }, null, 2));
+      });
+    }
+
+    if (v3Glossaries.length > 0) {
+      results.push("=== V3 Multilingual Glossaries ===");
+      v3Glossaries.forEach(glossary => {
+        results.push(JSON.stringify({
+          id: glossary.glossaryId,
+          name: glossary.name,
+          languages: glossary.languages,
+          entryCount: glossary.entryCount,
+          creationTime: glossary.creationTime
+        }, null, 2));
+      });
+    }
+
+    if (results.length === 0) {
+      return mcpContentifyText("No glossaries found");
+    }
+
+    return mcpContentifyText(results);
+  } catch (error) {
+    throw new Error(`Failed to list glossaries: ${error.message}`);
+  }
+}
+
+async function getGlossary({ glossaryId }) {
+  try {
+    let glossary;
+    let glossaryType;
+
+    // Try v2 first
+    try {
+      glossary = await deeplClient.getGlossary(glossaryId);
+      glossaryType = 'v2';
+    } catch (error) {
+      // If v2 fails, try v3
+      glossary = await deeplClient.getMultilingualGlossary(glossaryId);
+      glossaryType = 'v3';
+    }
+
+    const result = {
+      type: glossaryType,
+      id: glossary.glossaryId,
+      name: glossary.name,
+      entryCount: glossary.entryCount,
+      creationTime: glossary.creationTime
+    };
+
+    if (glossaryType === 'v2') {
+      result.sourceLang = glossary.sourceLang;
+      result.targetLang = glossary.targetLang;
+    } else {
+      result.languages = glossary.languages;
+    }
+
+    return mcpContentifyText(JSON.stringify(result, null, 2));
+  } catch (error) {
+    throw new Error(`Failed to get glossary: ${error.message}`);
+  }
+}
+
+async function getGlossaryEntries({ glossaryId, sourceLang, targetLang }) {
+  try {
+    let entries;
+    let glossaryType;
+    let glossary;
+
+    // Determine glossary type
+    try {
+      glossary = await deeplClient.getGlossary(glossaryId);
+      glossaryType = 'v2';
+    } catch (error) {
+      glossary = await deeplClient.getMultilingualGlossary(glossaryId);
+      glossaryType = 'v3';
+    }
+
+    // Get entries based on glossary type
+    if (glossaryType === 'v2') {
+      entries = await deeplClient.getGlossaryEntries(glossaryId);
+    } else {
+      // V3 requires source and target language codes
+      if (!sourceLang || !targetLang) {
+        throw new Error('For v3 multilingual glossaries, both sourceLang and targetLang are required');
+      }
+
+      const entriesResult = await deeplClient.getMultilingualGlossaryDictionaryEntries(
+        glossaryId,
+        sourceLang,
+        targetLang
+      );
+      entries = entriesResult.entries;
+    }
+
+    const results = [
+      `Glossary: ${glossary.name} (${glossaryType})`,
+      glossaryType === 'v2'
+        ? `Language pair: ${glossary.sourceLang} → ${glossary.targetLang}`
+        : `Language pair: ${sourceLang} → ${targetLang}`,
+      '',
+      'Entries:',
+      JSON.stringify(entries, null, 2)
+    ];
+
+    return mcpContentifyText(results);
+  } catch (error) {
+    throw new Error(`Failed to get glossary entries: ${error.message}`);
   }
 }
 
