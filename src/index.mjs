@@ -33,9 +33,6 @@ const writingTones = Object.values(deepl.WritingTone);
 
 const formalityTypes = ['less', 'more', 'default', 'prefer_less', 'prefer_more'];
 
-console.error("writingStyles is", writingStyles);
-console.error("writingTones is", writingTones);
-
 /**
  * Class to handle a list of languages and associated ISO-639 codes.
  * We normalize all language codes to lowercase, 

@@ -1,6 +1,6 @@
 {
   "name": "deepl-mcp-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for DeepL translation API",
   "main": "src/index.mjs",
   "bin": {
