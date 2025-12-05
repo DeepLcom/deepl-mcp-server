@@ -161,7 +161,7 @@ server.tool(
 
 server.tool(
   "get-glossary",
-  "Get detailed information about a specific glossary by ID",
+  "Get metadata about a specific glossary by ID (name, available dictionaries, creation time). Use get-glossary-dictionary-entries to fetch the actual dictionary term entries.",
   {
     glossaryId: z.string().describe("The unique identifier of the glossary")
   },
