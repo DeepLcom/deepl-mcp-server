@@ -28,10 +28,10 @@ const languageCodeDescription = "language code, in standard ISO-639-1 format (e.
 const deeplClient = new deepl.DeepLClient(DEEPL_API_KEY, deeplClientOptions);
 
 // Import WritingStyle and WritingTone enums from DeepL, and transform each to arrays of strings
-const writingStyles = Object.values(deepl.WritingStyle);
-const writingTones = Object.values(deepl.WritingTone);
+const writingStyles = /** @type {[string, ...string[]]} */ (Object.values(deepl.WritingStyle));
+const writingTones = /** @type {[string, ...string[]]} */ (Object.values(deepl.WritingTone));
 
-const formalityTypes = ['less', 'more', 'default', 'prefer_less', 'prefer_more'];
+const formalityTypes = /** @type {const} */ (['less', 'more', 'default', 'prefer_less', 'prefer_more']);
 
 console.error("writingStyles is", writingStyles);
 console.error("writingTones is", writingTones);
@@ -371,10 +371,10 @@ function mcpContentifyText(param) {
   const strings = typeof(param) === 'string' ? [param] : param;
 
   const contentObjects = strings.map(
-    str => ({
+    str => (/** @type {const} */ ({
         type: "text",
         text: str
-      })
+      }))
   );
 
   return {
