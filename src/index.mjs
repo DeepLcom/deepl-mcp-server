@@ -28,10 +28,10 @@ const languageCodeDescription = "language code, in standard ISO-639-1 format (e.
 const deeplClient = new deepl.DeepLClient(DEEPL_API_KEY, deeplClientOptions);
 
 // Import WritingStyle and WritingTone enums from DeepL, and transform each to arrays of strings
-const writingStyles = Object.values(deepl.WritingStyle);
-const writingTones = Object.values(deepl.WritingTone);
+const writingStyles = /** @type {[string, ...string[]]} */ (Object.values(deepl.WritingStyle));
+const writingTones = /** @type {[string, ...string[]]} */ (Object.values(deepl.WritingTone));
 
-const formalityTypes = ['less', 'more', 'default', 'prefer_less', 'prefer_more'];
+const formalityTypes = /** @type {const} */ (['less', 'more', 'default', 'prefer_less', 'prefer_more']);
 
 /**
  * Class to handle a list of languages and associated ISO-639 codes.
@@ -108,6 +108,7 @@ server.tool(
     text: z.string().describe("Text to translate"),
     targetLangCode: z.string().describe('target ' + languageCodeDescription),
     formality: z.enum(formalityTypes).optional().describe("Controls whether translations should lean toward informal or formal language"),
+    glossaryId: z.string().optional().describe("ID of glossary to use for translation"),
   },
   translateText
 );
@@ -144,8 +145,35 @@ server.tool(
     targetLangCode: z.string().describe('target ' + languageCodeDescription),
     sourceLang: z.string().optional().describe(`source ${languageCodeDescription}, or leave empty for auto-detection`),
     formality: z.enum(['less', 'more', 'default', 'prefer_less', 'prefer_more']).optional().describe("Controls whether translations should lean toward informal or formal language"),
+    glossaryId: z.string().optional().describe("ID of glossary to use for translation"),
   },
   translateDocument
+);
+
+server.tool(
+  "list-glossaries",
+  "Get list of all available glossaries",
+  listGlossaries
+);
+
+server.tool(
+  "get-glossary",
+  "Get metadata about a specific glossary by ID (name, available dictionaries, creation time). Use get-glossary-dictionary-entries to fetch the actual dictionary term entries.",
+  {
+    glossaryId: z.string().describe("The unique identifier of the glossary")
+  },
+  getGlossary
+);
+
+server.tool(
+  "get-glossary-dictionary-entries",
+  "Get the term entries from a glossary dictionary (a specific language pair within a glossary). You must specify source and target language codes to select which dictionary.",
+  {
+    glossaryId: z.string().describe("The unique identifier of the glossary"),
+    sourceLang: z.string().describe(`source ${languageCodeDescription}`),
+    targetLang: z.string().describe(`target ${languageCodeDescription}`)
+  },
+  getGlossaryDictionaryEntries
 );
 
 
@@ -170,14 +198,19 @@ async function getTargetLanguages() {
 }
 
 // The type assertion below asserts that the API will return a single result, not an array of results
-async function translateText ({ text, targetLangCode, formality }) {
+async function translateText ({ text, targetLangCode, formality, glossaryId }) {
   // Validate languages before translation
   targetLanguages.validate(targetLangCode);
 
   try {
-    const result = await deeplClient.translateText(text, null, targetLangCode, { formality });
+    const options = { formality };
+    if (glossaryId) {
+      options.glossary = glossaryId;
+    }
+
+    const result = await deeplClient.translateText(text, null, targetLangCode, options);
     const translation = /** @type {import('deepl-node').TextResult} */ (result);
-    
+
     return mcpContentifyText([
       translation.text,
       `Detected source language: ${translation.detectedSourceLang}`
@@ -216,7 +249,7 @@ async function getWritingTones() {
   }
 }
 
-async function translateDocument ({ inputFile, outputFile, targetLangCode, sourceLang, formality }) {
+async function translateDocument ({ inputFile, outputFile, targetLangCode, sourceLang, formality, glossaryId }) {
   // Validate target language
   targetLanguages.validate(targetLangCode);
 
@@ -229,12 +262,17 @@ async function translateDocument ({ inputFile, outputFile, targetLangCode, sourc
   }
 
   try {
+    const options = { formality };
+    if (glossaryId) {
+      options.glossary = glossaryId;
+    }
+
     const result = await deeplClient.translateDocument(
       inputFile,
       outputFile,
       sourceLang ? /** @type {import('deepl-node').SourceLanguageCode} */(sourceLang) : null,
       /** @type {import('deepl-node').TargetLanguageCode} */(targetLangCode),
-      { formality }
+      options
     );
 
     return mcpContentifyText([
@@ -244,6 +282,72 @@ async function translateDocument ({ inputFile, outputFile, targetLangCode, sourc
     ]);
   } catch (error) {
     throw new Error(`Document translation failed: ${error.message}`);
+  }
+}
+
+async function listGlossaries() {
+  try {
+    const glossaries = await deeplClient.listMultilingualGlossaries();
+
+    if (glossaries.length === 0) {
+      return mcpContentifyText("No glossaries found");
+    }
+
+    const results = glossaries.map(glossary => JSON.stringify({
+      id: glossary.glossaryId,
+      name: glossary.name,
+      dictionaries: glossary.dictionaries,
+      creationTime: glossary.creationTime
+    }, null, 2));
+
+    return mcpContentifyText(results);
+  } catch (error) {
+    throw new Error(`Failed to list glossaries: ${error.message}`);
+  }
+}
+
+async function getGlossary({ glossaryId }) {
+  try {
+    const glossary = await deeplClient.getMultilingualGlossary(glossaryId);
+
+    const result = {
+      id: glossary.glossaryId,
+      name: glossary.name,
+      dictionaries: glossary.dictionaries,
+      creationTime: glossary.creationTime
+    };
+
+    return mcpContentifyText(JSON.stringify(result, null, 2));
+  } catch (error) {
+    throw new Error(`Failed to get glossary: ${error.message}`);
+  }
+}
+
+async function getGlossaryDictionaryEntries({ glossaryId, sourceLang, targetLang }) {
+  try {
+    if (!sourceLang || !targetLang) {
+      throw new Error('Both sourceLang and targetLang are required to select a glossary dictionary');
+    }
+
+    const glossary = await deeplClient.getMultilingualGlossary(glossaryId);
+
+    const entriesResult = await deeplClient.getMultilingualGlossaryDictionaryEntries(
+      glossaryId,
+      sourceLang,
+      targetLang
+    );
+
+    const results = [
+      `Glossary: ${glossary.name}`,
+      `Language pair: ${sourceLang} → ${targetLang}`,
+      '',
+      'Entries:',
+      JSON.stringify(entriesResult.entries, null, 2)
+    ];
+
+    return mcpContentifyText(results);
+  } catch (error) {
+    throw new Error(`Failed to get glossary dictionary entries: ${error.message}`);
   }
 }
 
@@ -264,10 +368,10 @@ function mcpContentifyText(param) {
   const strings = typeof(param) === 'string' ? [param] : param;
 
   const contentObjects = strings.map(
-    str => ({
+    str => (/** @type {const} */ ({
         type: "text",
         text: str
-      })
+      }))
   );
 
   return {
