@@ -155,7 +155,7 @@ server.tool(
 
 server.tool(
   "list-glossaries",
-  "Get list of all available glossaries (both v2 monolingual and v3 multilingual)",
+  "Get list of all available glossaries",
   listGlossaries
 );
 
@@ -170,11 +170,11 @@ server.tool(
 
 server.tool(
   "get-glossary-entries",
-  "Get the term entries from a specific glossary. For v3 multilingual glossaries, you must specify source and target language codes.",
+  "Get the term entries from a specific glossary. You must specify source and target language codes.",
   {
     glossaryId: z.string().describe("The unique identifier of the glossary"),
-    sourceLang: z.string().optional().describe(`source ${languageCodeDescription} (required for v3 multilingual glossaries)`),
-    targetLang: z.string().optional().describe(`target ${languageCodeDescription} (required for v3 multilingual glossaries)`)
+    sourceLang: z.string().describe(`source ${languageCodeDescription}`),
+    targetLang: z.string().describe(`target ${languageCodeDescription}`)
   },
   getGlossaryEntries
 );
@@ -290,43 +290,18 @@ async function translateDocument ({ inputFile, outputFile, targetLangCode, sourc
 
 async function listGlossaries() {
   try {
-    const [v2Glossaries, v3Glossaries] = await Promise.all([
-      deeplClient.listGlossaries(),
-      deeplClient.listMultilingualGlossaries()
-    ]);
+    const glossaries = await deeplClient.listMultilingualGlossaries();
 
-    const results = [];
-
-    if (v2Glossaries.length > 0) {
-      results.push("=== V2 Monolingual Glossaries ===");
-      v2Glossaries.forEach(glossary => {
-        results.push(JSON.stringify({
-          id: glossary.glossaryId,
-          name: glossary.name,
-          sourceLang: glossary.sourceLang,
-          targetLang: glossary.targetLang,
-          entryCount: glossary.entryCount,
-          creationTime: glossary.creationTime
-        }, null, 2));
-      });
-    }
-
-    if (v3Glossaries.length > 0) {
-      results.push("=== V3 Multilingual Glossaries ===");
-      v3Glossaries.forEach(glossary => {
-        results.push(JSON.stringify({
-          id: glossary.glossaryId,
-          name: glossary.name,
-          languages: glossary.languages,
-          entryCount: glossary.entryCount,
-          creationTime: glossary.creationTime
-        }, null, 2));
-      });
-    }
-
-    if (results.length === 0) {
+    if (glossaries.length === 0) {
       return mcpContentifyText("No glossaries found");
     }
+
+    const results = glossaries.map(glossary => JSON.stringify({
+      id: glossary.glossaryId,
+      name: glossary.name,
+      dictionaries: glossary.dictionaries,
+      creationTime: glossary.creationTime
+    }, null, 2));
 
     return mcpContentifyText(results);
   } catch (error) {
@@ -336,33 +311,14 @@ async function listGlossaries() {
 
 async function getGlossary({ glossaryId }) {
   try {
-    let glossary;
-    let glossaryType;
-
-    // Try v2 first
-    try {
-      glossary = await deeplClient.getGlossary(glossaryId);
-      glossaryType = 'v2';
-    } catch (error) {
-      // If v2 fails, try v3
-      glossary = await deeplClient.getMultilingualGlossary(glossaryId);
-      glossaryType = 'v3';
-    }
+    const glossary = await deeplClient.getMultilingualGlossary(glossaryId);
 
     const result = {
-      type: glossaryType,
       id: glossary.glossaryId,
       name: glossary.name,
-      entryCount: glossary.entryCount,
+      dictionaries: glossary.dictionaries,
       creationTime: glossary.creationTime
     };
-
-    if (glossaryType === 'v2') {
-      result.sourceLang = glossary.sourceLang;
-      result.targetLang = glossary.targetLang;
-    } else {
-      result.languages = glossary.languages;
-    }
 
     return mcpContentifyText(JSON.stringify(result, null, 2));
   } catch (error) {
@@ -372,44 +328,24 @@ async function getGlossary({ glossaryId }) {
 
 async function getGlossaryEntries({ glossaryId, sourceLang, targetLang }) {
   try {
-    let entries;
-    let glossaryType;
-    let glossary;
-
-    // Determine glossary type
-    try {
-      glossary = await deeplClient.getGlossary(glossaryId);
-      glossaryType = 'v2';
-    } catch (error) {
-      glossary = await deeplClient.getMultilingualGlossary(glossaryId);
-      glossaryType = 'v3';
+    if (!sourceLang || !targetLang) {
+      throw new Error('Both sourceLang and targetLang are required for multilingual glossaries');
     }
 
-    // Get entries based on glossary type
-    if (glossaryType === 'v2') {
-      entries = await deeplClient.getGlossaryEntries(glossaryId);
-    } else {
-      // V3 requires source and target language codes
-      if (!sourceLang || !targetLang) {
-        throw new Error('For v3 multilingual glossaries, both sourceLang and targetLang are required');
-      }
+    const glossary = await deeplClient.getMultilingualGlossary(glossaryId);
 
-      const entriesResult = await deeplClient.getMultilingualGlossaryDictionaryEntries(
-        glossaryId,
-        sourceLang,
-        targetLang
-      );
-      entries = entriesResult.entries;
-    }
+    const entriesResult = await deeplClient.getMultilingualGlossaryDictionaryEntries(
+      glossaryId,
+      sourceLang,
+      targetLang
+    );
 
     const results = [
-      `Glossary: ${glossary.name} (${glossaryType})`,
-      glossaryType === 'v2'
-        ? `Language pair: ${glossary.sourceLang} → ${glossary.targetLang}`
-        : `Language pair: ${sourceLang} → ${targetLang}`,
+      `Glossary: ${glossary.name}`,
+      `Language pair: ${sourceLang} → ${targetLang}`,
       '',
       'Entries:',
-      JSON.stringify(entries, null, 2)
+      JSON.stringify(entriesResult.entries, null, 2)
     ];
 
     return mcpContentifyText(results);
