@@ -169,14 +169,14 @@ server.tool(
 );
 
 server.tool(
-  "get-glossary-entries",
-  "Get the term entries from a specific glossary. You must specify source and target language codes.",
+  "get-glossary-dictionary-entries",
+  "Get the term entries from a glossary dictionary (a specific language pair within a glossary). You must specify source and target language codes to select which dictionary.",
   {
     glossaryId: z.string().describe("The unique identifier of the glossary"),
     sourceLang: z.string().describe(`source ${languageCodeDescription}`),
     targetLang: z.string().describe(`target ${languageCodeDescription}`)
   },
-  getGlossaryEntries
+  getGlossaryDictionaryEntries
 );
 
 
@@ -326,10 +326,10 @@ async function getGlossary({ glossaryId }) {
   }
 }
 
-async function getGlossaryEntries({ glossaryId, sourceLang, targetLang }) {
+async function getGlossaryDictionaryEntries({ glossaryId, sourceLang, targetLang }) {
   try {
     if (!sourceLang || !targetLang) {
-      throw new Error('Both sourceLang and targetLang are required for multilingual glossaries');
+      throw new Error('Both sourceLang and targetLang are required to select a glossary dictionary');
     }
 
     const glossary = await deeplClient.getMultilingualGlossary(glossaryId);
@@ -350,7 +350,7 @@ async function getGlossaryEntries({ glossaryId, sourceLang, targetLang }) {
 
     return mcpContentifyText(results);
   } catch (error) {
-    throw new Error(`Failed to get glossary entries: ${error.message}`);
+    throw new Error(`Failed to get glossary dictionary entries: ${error.message}`);
   }
 }
 
