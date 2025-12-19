@@ -19,6 +19,7 @@ const deeplClientOptions = {
 
 // Descriptive text for reuse in our tools
 const languageCodeDescription = "language code, in standard ISO-639-1 format (e.g. 'en-US', 'de', 'fr')";
+const glossaryEntriesGuidance = "This does not fetch any glossary entries. Use the get-glossary-dictionary-entries tool to fetch entries."
 
 
 /*--------------------------------------------------------------------
@@ -35,7 +36,7 @@ const formalityTypes = /** @type {const} */ (['less', 'more', 'default', 'prefer
 
 /**
  * Class to handle a list of languages and associated ISO-639 codes.
- * We normalize all language codes to lowercase, 
+ * We normalize all language codes to lowercase
  * so that lowercase/uppercase differences don't inspire mistakes.
  * 
  * @property {Array<{name: string, code: string}>} list
@@ -43,32 +44,59 @@ const formalityTypes = /** @type {const} */ (['less', 'more', 'default', 'prefer
  */
 
 class LanguagesList {
-  constructor(list) {    
-    this.list = list;
-    this.codesList = list.map(lang => lang.code).join(', ');
+  static countryDefaults = {
+    'en': 'en-US',
+    'pt': 'pt-BR',
+    "zh": "zh-Hans"
   }
 
-  static async create(type) {
-    if (type != 'source' && type !== 'target') {
-      throw new Error('LanguagesList needs to be called with target or source');
+  constructor(list, direction = null) {    
+    this.list = list;
+    this.codesList = list.map(lang => lang.code).join(', ');
+    this.direction = direction;
+  }
+
+  static async create(direction) {
+    if (direction != 'source' && direction !== 'target') {
+      throw new Error('LanguagesList needs to be called with "target" or "source"');
     }
 
-    const method = type === 'source' ? 'getSourceLanguages' : 'getTargetLanguages';
+    const method = direction === 'source' ? 'getSourceLanguages' : 'getTargetLanguages';
     const langs = await deeplClient[method]();
     const lowerCaseLangs = langs.map(({ name, code }) => ({ name, code: code.toLowerCase() }));
-    return new LanguagesList(lowerCaseLangs);
+    const instance = new LanguagesList(lowerCaseLangs, direction);
+    return instance;
   }
 
   /**
    * Given an ISO-639 language code, throw an error if it's not in our codes list
    * @param {string} code
+   * 
+   * At present, our client libraries don't accept two-letter language codes for target_lang
+   * for cases where we support _locales_ - a language code plus country code, like "en-US".
+   * For example, if you specify `target_lang="en"`, you'll get an error. We want "en-US" or "en-UK".
+   * But in this server we don't want to reject such `target_lang`'s, because AI clients
+   * often want to send them.
+   * 
+   * So we're changing the `validate()` method to `normalize()`. We will still throw an error if
+   * we're passed an invalid code. But if we're passed a code that requires a country code as well,
+   * like "pt", we'll return the default, like "pt-BR".
    */
-  validate(code) {
+  normalize(code) {
     const lowerCode = code.toLowerCase();
+    let countryDefault;
 
+    // For target languages, if a language requires a country code (like pt-BR), return that
+    if (this.direction === 'target' && (countryDefault = LanguagesList.countryDefaults[lowerCode])) {
+      return countryDefault;
+    }
+
+    // Otherwise, ensure that the language code we're passed is supported
     if (!this.list.some(lang => lang.code === lowerCode)) {
       throw new Error(`Invalid language code: ${lowerCode}. Available codes: ${this.codesList}`);
     }
+
+    return lowerCode;
   }
 }
 
@@ -103,9 +131,10 @@ server.tool(
 
 server.tool(
   "translate-text",
-  "Translate text to a target language using DeepL API",
+  "Translate text to a target language using DeepL API. When the translation includes a glossary, you must specify the source language as well as the target language. If the user requests a glossary by name instead of by id, you can use the list-glossaries tool to get a name for each id.",
   {
     text: z.string().describe("Text to translate"),
+    sourceLangCode: z.string().optional().describe(`source ${languageCodeDescription}, or leave empty for auto-detection`),
     targetLangCode: z.string().describe('target ' + languageCodeDescription),
     formality: z.enum(formalityTypes).optional().describe("Controls whether translations should lean toward informal or formal language"),
     glossaryId: z.string().optional().describe("ID of glossary to use for translation"),
@@ -142,8 +171,8 @@ server.tool(
   {
     inputFile: z.string().describe("Path to the input document file to translate"),
     outputFile: z.string().optional().describe("Path where the translated document will be saved (if not provided, will be auto-generated)"),
+    sourceLangCode: z.string().optional().describe(`source ${languageCodeDescription}, or leave empty for auto-detection`),
     targetLangCode: z.string().describe('target ' + languageCodeDescription),
-    sourceLang: z.string().optional().describe(`source ${languageCodeDescription}, or leave empty for auto-detection`),
     formality: z.enum(['less', 'more', 'default', 'prefer_less', 'prefer_more']).optional().describe("Controls whether translations should lean toward informal or formal language"),
     glossaryId: z.string().optional().describe("ID of glossary to use for translation"),
   },
@@ -152,13 +181,13 @@ server.tool(
 
 server.tool(
   "list-glossaries",
-  "Get list of all available glossaries",
+  "Get a list of all glossaries with metadata for each - name, dictionaries available, and creation time. " + glossaryEntriesGuidance,
   listGlossaries
 );
 
 server.tool(
-  "get-glossary",
-  "Get metadata about a specific glossary by ID (name, available dictionaries, creation time). Use get-glossary-dictionary-entries to fetch the actual dictionary term entries.",
+  "get-glossary-info",
+  "Given an id, get metadata about the glossary with that id - its name, available dictionaries, and creation time. " + glossaryEntriesGuidance,
   {
     glossaryId: z.string().describe("The unique identifier of the glossary")
   },
@@ -167,11 +196,11 @@ server.tool(
 
 server.tool(
   "get-glossary-dictionary-entries",
-  "Get the term entries from a glossary dictionary (a specific language pair within a glossary). You must specify source and target language codes to select which dictionary.",
+  "Retrieve all the entries from a given glossary dictionary. (A glossary consists one of one or more dictionaries, each of which contains entries for a specific language pair, in one direction. For example, one dictionary could contain entries for translations from German to English, and another dictionary could contain entries for translations from English to German.) To retrieve all entries for a glossary with multiple dictionaries, use the get-glossary-info or list-glossaries tool to find out what dictionaries it contains, then use this tool for each dictionary.",
   {
     glossaryId: z.string().describe("The unique identifier of the glossary"),
-    sourceLang: z.string().describe(`source ${languageCodeDescription}`),
-    targetLang: z.string().describe(`target ${languageCodeDescription}`)
+    sourceLangCode: z.string().describe(`source ${languageCodeDescription}`),
+    targetLangCode: z.string().describe(`target ${languageCodeDescription}`)
   },
   getGlossaryDictionaryEntries
 );
@@ -198,9 +227,12 @@ async function getTargetLanguages() {
 }
 
 // The type assertion below asserts that the API will return a single result, not an array of results
-async function translateText ({ text, targetLangCode, formality, glossaryId }) {
-  // Validate languages before translation
-  targetLanguages.validate(targetLangCode);
+async function translateText ({ text, sourceLangCode = null, targetLangCode, formality, glossaryId }) {
+  if (sourceLangCode) {
+    sourceLanguages.normalize(sourceLangCode);
+  }
+  
+  targetLangCode = targetLanguages.normalize(targetLangCode);
 
   try {
     const options = { formality };
@@ -208,12 +240,13 @@ async function translateText ({ text, targetLangCode, formality, glossaryId }) {
       options.glossary = glossaryId;
     }
 
-    const result = await deeplClient.translateText(text, null, targetLangCode, options);
+    const result = await deeplClient.translateText(text, sourceLangCode, targetLangCode, options);
     const translation = /** @type {import('deepl-node').TextResult} */ (result);
 
     return mcpContentifyText([
       translation.text,
-      `Detected source language: ${translation.detectedSourceLang}`
+      `Detected source language: ${translation.detectedSourceLang}`,
+      `Target language used: ${targetLangCode}`
     ]);
 
   } catch (error) {
@@ -249,9 +282,12 @@ async function getWritingTones() {
   }
 }
 
-async function translateDocument ({ inputFile, outputFile, targetLangCode, sourceLang, formality, glossaryId }) {
-  // Validate target language
-  targetLanguages.validate(targetLangCode);
+async function translateDocument ({ inputFile, outputFile, sourceLangCode, targetLangCode, formality, glossaryId }) {
+  if (sourceLangCode) {
+    sourceLanguages.normalize(sourceLangCode);
+  }
+  
+  targetLangCode = targetLanguages.normalize(targetLangCode);
 
   // Generate output file name if not provided
   if (!outputFile) {
@@ -270,13 +306,14 @@ async function translateDocument ({ inputFile, outputFile, targetLangCode, sourc
     const result = await deeplClient.translateDocument(
       inputFile,
       outputFile,
-      sourceLang ? /** @type {import('deepl-node').SourceLanguageCode} */(sourceLang) : null,
+      sourceLangCode ? /** @type {import('deepl-node').SourceLanguageCode} */(sourceLangCode) : null,
       /** @type {import('deepl-node').TargetLanguageCode} */(targetLangCode),
       options
     );
 
     return mcpContentifyText([
       `Document translated successfully! Status: ${result.status}`,
+      `Target language used: ${targetLangCode}`,
       `Characters billed: ${result.billedCharacters}`,
       `Output file: ${outputFile}`
     ]);
@@ -323,23 +360,25 @@ async function getGlossary({ glossaryId }) {
   }
 }
 
-async function getGlossaryDictionaryEntries({ glossaryId, sourceLang, targetLang }) {
+async function getGlossaryDictionaryEntries({ glossaryId, sourceLangCode, targetLangCode }) {
   try {
-    if (!sourceLang || !targetLang) {
-      throw new Error('Both sourceLang and targetLang are required to select a glossary dictionary');
+    if (!sourceLangCode || !targetLangCode) {
+      throw new Error('To access a glossary dictionary, you must specify its source and target languages');
     }
+
+    //TODO: we validate language codes everywhere else. Let's do it here too... but they need to be valid glossary language codes, oy vey
 
     const glossary = await deeplClient.getMultilingualGlossary(glossaryId);
 
     const entriesResult = await deeplClient.getMultilingualGlossaryDictionaryEntries(
       glossaryId,
-      sourceLang,
-      targetLang
+      sourceLangCode,
+      targetLangCode
     );
 
     const results = [
       `Glossary: ${glossary.name}`,
-      `Language pair: ${sourceLang} → ${targetLang}`,
+      `Language pair: ${sourceLangCode} → ${targetLangCode}`,
       '',
       'Entries:',
       JSON.stringify(entriesResult.entries, null, 2)
