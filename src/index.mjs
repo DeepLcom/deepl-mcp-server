@@ -366,8 +366,6 @@ async function getGlossaryDictionaryEntries({ glossaryId, sourceLangCode, target
       throw new Error('To access a glossary dictionary, you must specify its source and target languages');
     }
 
-    //TODO: we validate language codes everywhere else. Let's do it here too... but they need to be valid glossary language codes, oy vey
-
     const glossary = await deeplClient.getMultilingualGlossary(glossaryId);
 
     const entriesResult = await deeplClient.getMultilingualGlossaryDictionaryEntries(
