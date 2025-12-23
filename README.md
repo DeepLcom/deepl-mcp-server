@@ -9,10 +9,12 @@ A Model Context Protocol (MCP) server that provides translation capabilities usi
 ## Features
 
 - Translate text between numerous languages
+- Translate documents
 - Rephrase text using DeepL's capabilities
 - Access to all DeepL API languages and features
 - Automatic language detection
 - Formality control for supported languages
+- DeepL glossary support for consistent terminology translation
 
 ## Usage
 
@@ -101,31 +103,140 @@ This server provides the following tools:
 - `get-target-languages`: Get list of available target languages for translation
 - `translate-text`: Translate text to a target language
 - `rephrase-text`: Rephrase text in the same or different language
+- `translate-document`: Translate a document
+- `list-glossaries`: Get list of all glossaries and their associated metadata
+- `get-glossary-info`: Get metadata about a specific glossary by id
+- `get-glossary-dictionary-entries`: Retrieve entries from a glossary dictionary
 
 ## Tool Details
 
-### translate-text
+### Translation tools
+
+#### translate-text
 
 This tool translates text between languages using the DeepL API.
 
 Parameters:
 
 - `text`: The text to translate
-- `targetLang`: Target language code (e.g., 'en-US', 'de', 'fr')
+- `sourceLangCode` (optional): Source language code (e.g., 'en', 'de', 'fr'). Leave empty for automatic detection. **Required when using a glossary**.
+- `targetLangCode`: Target language code (e.g., 'en-US', 'de', 'fr')
 - `formality` (optional): Controls formality level of the translation:
   - `'less'`: use informal language
   - `'more'`: use formal, more polite language
   - `'default'`: use default formality
   - `'prefer_less'`: use informal language if available, otherwise default
   - `'prefer_more'`: use formal language if available, otherwise default
+  - `glossaryId` (optional): id of a glossary to apply to the translation
 
-### rephrase-text
+#### translate-document
+This tool translates document files using the DeepL API. Supported formats include PDF, DOCX, PPTX, XLSX, HTML, TXT, and more.
 
-This tool rephrases text in the same or different language using the DeepL API.
+**Note**: Since this tool expects a filename, your AI agent will need access to a filesystem tool.
+
+Parameters:
+- `inputFile`: Path to the input document file to translate
+- `outputFile` (optional): Path where the translated document will be saved. If not provided, will be auto-generated based on the input filename with the target language code appended (e.g., `document_de.pdf` for German translation)
+- `sourceLangCode` (optional): Source language code (e.g., 'en', 'de', 'fr'). Leave empty for automatic detection. **Required when using a glossary**.
+- `targetLangCode`: Target language code (e.g., 'en-US', 'de', 'fr')
+- `formality` (optional): Controls formality level (same options as `translate-text`)
+- `glossaryId` (optional): ID of a glossary to use for consistent terminology translation
+
+Returns:
+- Translation status
+- Number of characters billed
+- Output file path
+
+### Glossary Tools
+
+Most agents are smart enough to use a given glossary in translation if you pass along the glossary's name. 
+The agent can use `list-glossaries` to pull metadata on all your glossaries, which includes their names. 
+And then it can include the right glossary's id. But you can also just give the agent a glossary id.
+
+#### list-glossaries
+
+Lists all glossaries available in your DeepL account with their metadata.
+
+Returns for each glossary:
+- `id`: Unique identifier for the glossary
+- `name`: Human-readable name
+- `dictionaries`: Available language pair dictionaries (e.g., `{"en": ["de"], "de": ["en"]}` for bidirectional EN↔DE)
+- `creationTime`: When the glossary was created
+
+**Note**: This tool returns metadata only, not the actual glossary entries.
+
+#### get-glossary-info
+
+Retrieves metadata about a specific glossary by its ID.
+
+Parameters:
+- `glossaryId`: The unique identifier of the glossary
+
+Returns the same information as `list-glossaries` but for a single glossary.
+
+**Note**: This tool returns metadata only, not the actual glossary entries.
+
+#### get-glossary-dictionary-entries
+
+Retrieves the actual term entries from a specific glossary dictionary.
+
+A dictionary is a list of entries for a specific language pair and translation direction. 
+A glossary can contain multiple dictionaries. For example, a bidirectional English-German glossary would have two dictionaries: one for EN→DE and another for DE→EN. 
+
+Most agents are able to retrieve an entire glossary by using `list-glossaries` or `get-glossary-info` to find available dictionaries, then calling this tool for each one.
+
+Parameters:
+- `glossaryId`: The unique identifier of the glossary
+- `sourceLangCode`: Source language code for the dictionary (e.g., 'en')
+- `targetLangCode`: Target language code for the dictionary (e.g., 'de')
+
+Returns:
+- Glossary name
+- Language pair being retrieved
+- All entries in the dictionary as key-value pairs
+
+### Other tools
+
+#### rephrase-text
+
+This tool rephrases text in a given language.
 
 Parameters:
 
 - `text`: The text to rephrase
+- `style` (optional): Writing style for the rephrased text. Use `get-writing-styles` to see available options (e.g., 'business', 'academic', 'casual')
+- `tone` (optional): Writing tone for the rephrased text. Use `get-writing-tones` to see available options (e.g., 'enthusiastic', 'friendly', 'professional')
+
+#### get-source-languages
+
+Returns the complete list of source languages supported by the DeepL API, with language names and ISO-639 codes.
+
+_No parameters required._
+
+#### get-target-languages
+
+Returns the complete list of target languages supported by the DeepL API, with language names and ISO-639 codes.
+
+_No parameters required._
+
+#### get-writing-styles
+
+Returns the list of available writing styles that can be used with the `rephrase-text` tool. These styles adjust the overall character of the writing to suit different contexts.
+
+No parameters required.
+
+
+#### get-source-languages
+
+Returns the complete list of source languages supported by the DeepL API, with language names and ISO-639 codes.
+
+_No parameters required._
+
+#### get-target-languages
+
+Returns the complete list of target languages supported by the DeepL API, with language names and ISO-639 codes.
+
+_No parameters required._
 
 ## Supported Languages
 
