@@ -131,13 +131,17 @@ server.tool(
 
 server.tool(
   "translate-text",
-  "Translate text to a target language using DeepL API. When the translation includes a glossary, you must specify the source language as well as the target language. If the user requests a glossary by name instead of by id, you can use the list-glossaries tool to get a name for each id.",
+  "Translate text to a target language using DeepL API. Review all available optional parameters and use those applicable to your scenario for best results. When the translation includes a glossary, you must specify the source language as well as the target language. If the user requests a glossary by name instead of by id, you can use the list-glossaries tool to get a name for each id.",
   {
     text: z.string().describe("Text to translate"),
     sourceLangCode: z.string().optional().describe(`source ${languageCodeDescription}, or leave empty for auto-detection`),
     targetLangCode: z.string().describe('target ' + languageCodeDescription),
-    formality: z.enum(formalityTypes).optional().describe("Controls whether translations should lean toward informal or formal language"),
-    glossaryId: z.string().optional().describe("ID of glossary to use for translation"),
+    formality: z.enum(formalityTypes).optional().describe("Controls formality: 'less' for informal, 'more' for formal/polite, 'prefer_less'/'prefer_more' to prefer but fall back to default"),
+    glossaryId: z.string().optional().describe("Glossary ID to ensure consistent terminology translation"),
+    context: z.string().optional().describe("Recommended: describe what this text is about (e.g., 'Technical documentation for a software API'). Improves translation accuracy but is not itself translated."),
+    preserveFormatting: z.boolean().optional().describe("Set to true to preserve original formatting - recommended for markdown, code blocks, HTML, or any structured text"),
+    splitSentences: z.enum(['0', '1', 'nonewlines']).optional().describe("Sentence splitting: '0' disables, '1' (default) splits on punctuation and newlines, 'nonewlines' preserves line breaks"),
+    customInstructions: z.array(z.string()).optional().describe("Array of custom instructions to guide translation style (max 10 instructions, 300 chars each)"),
   },
   translateText
 );
@@ -227,11 +231,21 @@ async function getTargetLanguages() {
 }
 
 // The type assertion below asserts that the API will return a single result, not an array of results
-async function translateText ({ text, sourceLangCode = null, targetLangCode, formality, glossaryId }) {
+async function translateText ({
+  text,
+  sourceLangCode = null,
+  targetLangCode,
+  formality,
+  glossaryId,
+  context,
+  preserveFormatting,
+  splitSentences,
+  customInstructions,
+}) {
   if (sourceLangCode) {
     sourceLanguages.normalize(sourceLangCode);
   }
-  
+
   targetLangCode = targetLanguages.normalize(targetLangCode);
 
   try {
@@ -239,6 +253,10 @@ async function translateText ({ text, sourceLangCode = null, targetLangCode, for
     if (glossaryId) {
       options.glossary = glossaryId;
     }
+    if (context) options.context = context;
+    if (preserveFormatting !== undefined) options.preserveFormatting = preserveFormatting;
+    if (splitSentences) options.splitSentences = splitSentences;
+    if (customInstructions) options.customInstructions = customInstructions;
 
     const result = await deeplClient.translateText(text, sourceLangCode, targetLangCode, options);
     const translation = /** @type {import('deepl-node').TextResult} */ (result);
