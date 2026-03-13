@@ -42,6 +42,16 @@ npm install
 
 You'll need a DeepL API key to use this server. You can get one by signing up at [DeepL API](https://www.deepl.com/pro-api?utm_source=github&utm_medium=github-mcp-server-readme). With a DeepL API Free account you can translate up to 500,000 characters/month for free.
 
+## Using with Claude Code
+
+To add this MCP server to [Claude Code](https://docs.anthropic.com/en/docs/claude-code), run:
+
+```bash
+claude mcp add deepl -e DEEPL_API_KEY=your-api-key -- npx deepl-mcp-server
+```
+
+Replace `your-api-key` with your actual DeepL API key.
+
 ## Using with Claude Desktop
 
 This MCP server integrates with Claude Desktop to provide translation capabilities directly in your conversations with Claude.
