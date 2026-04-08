@@ -105,6 +105,33 @@ class LanguagesList {
 const sourceLanguages = await LanguagesList.create('source');
 const targetLanguages = await LanguagesList.create('target');
 
+/**
+ * Normalize and validate a language code for glossary operations.
+ * Glossary APIs use base language codes (e.g. 'en', 'de') unlike translation
+ * APIs that may require locale-specific codes (e.g. 'en-US').
+ * 
+ * @param {string} langCode
+ * @param {string} fieldName - Name of the field, used in error messages
+ * @returns {string} Normalized language code (lowercase, trimmed, underscores replaced with hyphens)
+ */
+function normalizeGlossaryLangCode(langCode, fieldName) {
+  if (typeof langCode !== 'string') {
+    throw new Error(`${fieldName} must be a string`);
+  }
+
+  const normalized = langCode.trim().replace(/_/g, '-').toLowerCase();
+
+  if (!normalized) {
+    throw new Error(`${fieldName} is required`);
+  }
+
+  if (!/^[a-z]{2,3}(?:-[a-z0-9]+)*$/.test(normalized)) {
+    throw new Error(`Invalid ${fieldName}: ${langCode}`);
+  }
+
+  return normalized;
+}
+
 /*--------------------------------------------------------------------
  *  Create MCP server
  *-------------------------------------------------------------------*/
@@ -516,6 +543,9 @@ async function getGlossaryDictionaryEntries({ glossaryId, sourceLangCode, target
       throw new Error('To access a glossary dictionary, you must specify its source and target languages');
     }
 
+    sourceLangCode = normalizeGlossaryLangCode(sourceLangCode, 'sourceLangCode');
+    targetLangCode = normalizeGlossaryLangCode(targetLangCode, 'targetLangCode');
+
     const glossary = await deeplClient.getMultilingualGlossary(glossaryId);
 
     const entriesResult = await deeplClient.getMultilingualGlossaryDictionaryEntries(
@@ -541,8 +571,8 @@ async function getGlossaryDictionaryEntries({ glossaryId, sourceLangCode, target
 async function createGlossary({ name, dictionaries }) {
   try {
     const glossaryDicts = dictionaries.map(dict => ({
-      sourceLangCode: dict.sourceLangCode.toLowerCase(),
-      targetLangCode: dict.targetLangCode.toLowerCase(),
+      sourceLangCode: normalizeGlossaryLangCode(dict.sourceLangCode, 'sourceLangCode'),
+      targetLangCode: normalizeGlossaryLangCode(dict.targetLangCode, 'targetLangCode'),
       entries: new deepl.GlossaryEntries({ entries: dict.entries })
     }));
 
@@ -577,8 +607,8 @@ async function updateGlossaryName({ glossaryId, name }) {
 async function updateGlossaryDictionary({ glossaryId, sourceLangCode, targetLangCode, entries }) {
   try {
     const glossaryDict = {
-      sourceLangCode: sourceLangCode.toLowerCase(),
-      targetLangCode: targetLangCode.toLowerCase(),
+      sourceLangCode: normalizeGlossaryLangCode(sourceLangCode, 'sourceLangCode'),
+      targetLangCode: normalizeGlossaryLangCode(targetLangCode, 'targetLangCode'),
       entries: new deepl.GlossaryEntries({ entries })
     };
 
@@ -606,8 +636,8 @@ async function deleteGlossary({ glossaryId }) {
 
 async function deleteGlossaryDictionary({ glossaryId, sourceLangCode, targetLangCode }) {
   try {
-    sourceLangCode = sourceLangCode.toLowerCase();
-    targetLangCode = targetLangCode.toLowerCase();
+    sourceLangCode = normalizeGlossaryLangCode(sourceLangCode, 'sourceLangCode');
+    targetLangCode = normalizeGlossaryLangCode(targetLangCode, 'targetLangCode');
     await deeplClient.deleteMultilingualGlossaryDictionary(glossaryId, sourceLangCode, targetLangCode);
     return mcpContentifyText(`Dictionary ${sourceLangCode} → ${targetLangCode} deleted from glossary ${glossaryId}`);
   } catch (error) {
