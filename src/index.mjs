@@ -13,7 +13,7 @@ const DEEPL_API_KEY = process.env.DEEPL_API_KEY;
 const deeplClientOptions = {
   appInfo: {
     appName: 'DeepL-MCP',
-    appVersion: '0.1.3-beta.0',
+    appVersion: '1.2.0',
   },
 };
 
@@ -33,6 +33,8 @@ const writingStyles = /** @type {[string, ...string[]]} */ (Object.values(deepl.
 const writingTones = /** @type {[string, ...string[]]} */ (Object.values(deepl.WritingTone));
 
 const formalityTypes = /** @type {const} */ (['less', 'more', 'default', 'prefer_less', 'prefer_more']);
+const modelTypes = /** @type {const} */ (['quality_optimized', 'latency_optimized', 'prefer_quality_optimized']);
+const tagHandlingModes = /** @type {const} */ (['html', 'xml']);
 
 /**
  * Class to handle a list of languages and associated ISO-639 codes.
@@ -138,10 +140,13 @@ server.tool(
     targetLangCode: z.string().describe('target ' + languageCodeDescription),
     formality: z.enum(formalityTypes).optional().describe("Controls formality: 'less' for informal, 'more' for formal/polite, 'prefer_less'/'prefer_more' to prefer but fall back to default"),
     glossaryId: z.string().optional().describe("Glossary ID to ensure consistent terminology translation"),
+    styleRuleId: z.string().optional().describe("Style rule ID to apply a predefined style rule to the translation. Use list-style-rules to find available style rule IDs."),
     context: z.string().optional().describe("Recommended: describe what this text is about (e.g., 'Technical documentation for a software API'). Improves translation accuracy but is not itself translated."),
     preserveFormatting: z.boolean().optional().describe("Set to true to preserve original formatting - recommended for markdown, code blocks, HTML, or any structured text"),
     splitSentences: z.enum(['0', '1', 'nonewlines']).optional().describe("Sentence splitting: '0' disables, '1' (default) splits on punctuation and newlines, 'nonewlines' preserves line breaks"),
-    customInstructions: z.array(z.string()).optional().describe("Array of custom instructions to guide translation style (max 10 instructions, 300 chars each)"),
+    modelType: z.enum(modelTypes).optional().describe("Translation model type: 'quality_optimized' for best quality (slower), 'latency_optimized' for fastest response (lower quality), 'prefer_quality_optimized' for best available quality"),
+    tagHandling: z.enum(tagHandlingModes).optional().describe("Type of tags to parse before translation: 'html' for HTML content, 'xml' for XML content"),
+    customInstructions: z.array(z.string()).optional().describe("Array of custom instructions to guide translation style (max 10 instructions, 300 chars each). Note: forces quality_optimized model type."),
   },
   translateText
 );
@@ -160,9 +165,10 @@ server.tool(
 
 server.tool(
   "rephrase-text",
-  "Rephrase text in the same language using DeepL API",
+  "Rephrase text using DeepL API. If no target language is specified, the language is auto-detected.",
   {
     text: z.string().describe("Text to rephrase"),
+    targetLangCode: z.string().optional().describe(`target ${languageCodeDescription} for rephrasing, or leave empty for auto-detection`),
     style: z.enum(writingStyles).optional().describe("Writing style for rephrasing"),
     tone: z.enum(writingTones).optional().describe("Writing tone for rephrasing")
   },
@@ -179,6 +185,8 @@ server.tool(
     targetLangCode: z.string().describe('target ' + languageCodeDescription),
     formality: z.enum(['less', 'more', 'default', 'prefer_less', 'prefer_more']).optional().describe("Controls whether translations should lean toward informal or formal language"),
     glossaryId: z.string().optional().describe("ID of glossary to use for translation"),
+    styleRuleId: z.string().optional().describe("Style rule ID to apply a predefined style rule to the document translation. Use list-style-rules to find available style rule IDs."),
+    enableDocumentMinification: z.boolean().optional().describe("Set to true to minify large documents (pptx, docx) by temporarily replacing media with placeholders before translation, useful for files approaching the 30MB API limit"),
   },
   translateDocument
 );
@@ -209,6 +217,112 @@ server.tool(
   getGlossaryDictionaryEntries
 );
 
+server.tool(
+  "create-glossary",
+  "Create a new multilingual glossary with one or more dictionaries. Each dictionary is a set of term pairs for a specific source-target language combination.",
+  {
+    name: z.string().describe("Name for the new glossary"),
+    dictionaries: z.array(z.object({
+      sourceLangCode: z.string().describe(`source ${languageCodeDescription}`),
+      targetLangCode: z.string().describe(`target ${languageCodeDescription}`),
+      entries: z.record(z.string()).describe("Object mapping source terms to target terms, e.g. { 'hello': 'hallo', 'world': 'Welt' }")
+    })).describe("Array of dictionaries, each with a language pair and entries")
+  },
+  createGlossary
+);
+
+server.tool(
+  "update-glossary-name",
+  "Rename an existing glossary",
+  {
+    glossaryId: z.string().describe("The unique identifier of the glossary"),
+    name: z.string().describe("New name for the glossary")
+  },
+  updateGlossaryName
+);
+
+server.tool(
+  "update-glossary-dictionary",
+  "Update or add entries in a glossary dictionary for a specific language pair. Existing entries for the same source term will be overwritten, new entries will be added, and entries not mentioned will be kept.",
+  {
+    glossaryId: z.string().describe("The unique identifier of the glossary"),
+    sourceLangCode: z.string().describe(`source ${languageCodeDescription}`),
+    targetLangCode: z.string().describe(`target ${languageCodeDescription}`),
+    entries: z.record(z.string()).describe("Object mapping source terms to target terms, e.g. { 'hello': 'hallo', 'world': 'Welt' }")
+  },
+  updateGlossaryDictionary
+);
+
+server.tool(
+  "delete-glossary",
+  "Delete a glossary and all its dictionaries",
+  {
+    glossaryId: z.string().describe("The unique identifier of the glossary to delete")
+  },
+  deleteGlossary
+);
+
+server.tool(
+  "delete-glossary-dictionary",
+  "Delete a specific dictionary (language pair) from a glossary, without deleting the whole glossary",
+  {
+    glossaryId: z.string().describe("The unique identifier of the glossary"),
+    sourceLangCode: z.string().describe(`source ${languageCodeDescription}`),
+    targetLangCode: z.string().describe(`target ${languageCodeDescription}`)
+  },
+  deleteGlossaryDictionary
+);
+
+server.tool(
+  "get-glossary-language-pairs",
+  "Get the list of language pairs supported for glossaries",
+  getGlossaryLanguagePairs
+);
+
+server.tool(
+  "list-style-rules",
+  "Get a list of all available style rules with their IDs, names, and configuration. Style rules can be used with translate-text and translate-document to apply consistent translation styles.",
+  {
+    detailed: z.boolean().optional().describe("Set to true to include configured rules and custom instructions in the response (default: false for faster responses)")
+  },
+  listStyleRules
+);
+
+server.tool(
+  "get-style-rule",
+  "Get detailed information about a specific style rule by its ID, including configured rules and custom instructions",
+  {
+    styleRuleId: z.string().describe("The unique identifier of the style rule")
+  },
+  getStyleRule
+);
+
+server.tool(
+  "create-style-rule",
+  "Create a new style rule with a name and language code. Style rules allow you to customize translation styles consistently across translations.",
+  {
+    name: z.string().describe("Name for the new style rule"),
+    language: z.string().describe(`${languageCodeDescription} this style rule applies to`),
+    configuredRules: z.record(z.record(z.string())).optional().describe("Predefined rules to configure, organized by category (e.g. { 'style_and_tone': { 'formality': 'formal' }, 'numbers': { 'decimal_separator': '.' } })"),
+  },
+  createStyleRule
+);
+
+server.tool(
+  "delete-style-rule",
+  "Delete a style rule by its ID",
+  {
+    styleRuleId: z.string().describe("The unique identifier of the style rule to delete")
+  },
+  deleteStyleRule
+);
+
+server.tool(
+  "get-usage",
+  "Get current API usage and limits for your DeepL account, including character counts, document counts, and team document counts",
+  getUsage
+);
+
 
 /*--------------------------------------------------------------------
  *  Server tool callback functions
@@ -237,9 +351,12 @@ async function translateText ({
   targetLangCode,
   formality,
   glossaryId,
+  styleRuleId,
   context,
   preserveFormatting,
   splitSentences,
+  modelType,
+  tagHandling,
   customInstructions,
 }) {
   if (sourceLangCode) {
@@ -253,19 +370,27 @@ async function translateText ({
     if (glossaryId) {
       options.glossary = glossaryId;
     }
+    if (styleRuleId) options.styleRule = styleRuleId;
     if (context) options.context = context;
     if (preserveFormatting !== undefined) options.preserveFormatting = preserveFormatting;
     if (splitSentences) options.splitSentences = splitSentences;
+    if (modelType) options.modelType = modelType;
+    if (tagHandling) options.tagHandling = tagHandling;
     if (customInstructions) options.customInstructions = customInstructions;
 
     const result = await deeplClient.translateText(text, sourceLangCode, targetLangCode, options);
     const translation = /** @type {import('deepl-node').TextResult} */ (result);
 
-    return mcpContentifyText([
+    const responseLines = [
       translation.text,
       `Detected source language: ${translation.detectedSourceLang}`,
       `Target language used: ${targetLangCode}`
-    ]);
+    ];
+    if (translation.modelTypeUsed) {
+      responseLines.push(`Model type used: ${translation.modelTypeUsed}`);
+    }
+
+    return mcpContentifyText(responseLines);
 
   } catch (error) {
     throw new Error(`Translation failed: ${error.message}`);
@@ -273,9 +398,9 @@ async function translateText ({
 }
 
 // The type assertion below asserts that the API will return a single result, not an array of results
-async function rephraseText({ text, style, tone }) {
+async function rephraseText({ text, targetLangCode = null, style, tone }) {
   try {
-    const result = await deeplClient.rephraseText(text, null, style, tone);
+    const result = await deeplClient.rephraseText(text, targetLangCode, style, tone);
     const translation = /** @type {import('deepl-node').WriteResult} */ (result);
     return mcpContentifyText(translation.text);
 
@@ -300,7 +425,7 @@ async function getWritingTones() {
   }
 }
 
-async function translateDocument ({ inputFile, outputFile, sourceLangCode, targetLangCode, formality, glossaryId }) {
+async function translateDocument ({ inputFile, outputFile, sourceLangCode, targetLangCode, formality, glossaryId, styleRuleId, enableDocumentMinification }) {
   if (sourceLangCode) {
     sourceLanguages.normalize(sourceLangCode);
   }
@@ -320,6 +445,8 @@ async function translateDocument ({ inputFile, outputFile, sourceLangCode, targe
     if (glossaryId) {
       options.glossary = glossaryId;
     }
+    if (styleRuleId) options.styleRule = styleRuleId;
+    if (enableDocumentMinification !== undefined) options.enableDocumentMinification = enableDocumentMinification;
 
     const result = await deeplClient.translateDocument(
       inputFile,
@@ -403,6 +530,197 @@ async function getGlossaryDictionaryEntries({ glossaryId, sourceLangCode, target
     return mcpContentifyText(results);
   } catch (error) {
     throw new Error(`Failed to get glossary dictionary entries: ${error.message}`);
+  }
+}
+
+async function createGlossary({ name, dictionaries }) {
+  try {
+    const glossaryDicts = dictionaries.map(dict => ({
+      sourceLangCode: dict.sourceLangCode,
+      targetLangCode: dict.targetLangCode,
+      entries: new deepl.GlossaryEntries({ entries: dict.entries })
+    }));
+
+    const glossary = await deeplClient.createMultilingualGlossary(name, glossaryDicts);
+
+    return mcpContentifyText(JSON.stringify({
+      id: glossary.glossaryId,
+      name: glossary.name,
+      dictionaries: glossary.dictionaries,
+      creationTime: glossary.creationTime
+    }, null, 2));
+  } catch (error) {
+    throw new Error(`Failed to create glossary: ${error.message}`);
+  }
+}
+
+async function updateGlossaryName({ glossaryId, name }) {
+  try {
+    const glossary = await deeplClient.updateMultilingualGlossaryName(glossaryId, name);
+
+    return mcpContentifyText(JSON.stringify({
+      id: glossary.glossaryId,
+      name: glossary.name,
+      dictionaries: glossary.dictionaries,
+      creationTime: glossary.creationTime
+    }, null, 2));
+  } catch (error) {
+    throw new Error(`Failed to update glossary name: ${error.message}`);
+  }
+}
+
+async function updateGlossaryDictionary({ glossaryId, sourceLangCode, targetLangCode, entries }) {
+  try {
+    const glossaryDict = {
+      sourceLangCode,
+      targetLangCode,
+      entries: new deepl.GlossaryEntries({ entries })
+    };
+
+    const glossary = await deeplClient.updateMultilingualGlossaryDictionary(glossaryId, glossaryDict);
+
+    return mcpContentifyText(JSON.stringify({
+      id: glossary.glossaryId,
+      name: glossary.name,
+      dictionaries: glossary.dictionaries,
+      creationTime: glossary.creationTime
+    }, null, 2));
+  } catch (error) {
+    throw new Error(`Failed to update glossary dictionary: ${error.message}`);
+  }
+}
+
+async function deleteGlossary({ glossaryId }) {
+  try {
+    await deeplClient.deleteMultilingualGlossary(glossaryId);
+    return mcpContentifyText(`Glossary ${glossaryId} deleted successfully`);
+  } catch (error) {
+    throw new Error(`Failed to delete glossary: ${error.message}`);
+  }
+}
+
+async function deleteGlossaryDictionary({ glossaryId, sourceLangCode, targetLangCode }) {
+  try {
+    await deeplClient.deleteMultilingualGlossaryDictionary(glossaryId, sourceLangCode, targetLangCode);
+    return mcpContentifyText(`Dictionary ${sourceLangCode} → ${targetLangCode} deleted from glossary ${glossaryId}`);
+  } catch (error) {
+    throw new Error(`Failed to delete glossary dictionary: ${error.message}`);
+  }
+}
+
+async function getGlossaryLanguagePairs() {
+  try {
+    const pairs = await deeplClient.getGlossaryLanguagePairs();
+    const results = pairs.map(pair => `${pair.sourceLang} → ${pair.targetLang}`);
+    return mcpContentifyText(results);
+  } catch (error) {
+    throw new Error(`Failed to get glossary language pairs: ${error.message}`);
+  }
+}
+
+async function listStyleRules({ detailed = false } = {}) {
+  try {
+    const styleRules = await deeplClient.getAllStyleRules(undefined, undefined, detailed);
+
+    if (styleRules.length === 0) {
+      return mcpContentifyText("No style rules found");
+    }
+
+    const results = styleRules.map(rule => JSON.stringify({
+      id: rule.styleId,
+      name: rule.name,
+      language: rule.language,
+      creationTime: rule.creationTime,
+      updatedTime: rule.updatedTime,
+      ...(detailed && rule.configuredRules ? { configuredRules: rule.configuredRules } : {}),
+      ...(detailed && rule.customInstructions ? { customInstructions: rule.customInstructions } : {})
+    }, null, 2));
+
+    return mcpContentifyText(results);
+  } catch (error) {
+    throw new Error(`Failed to list style rules: ${error.message}`);
+  }
+}
+
+async function getStyleRule({ styleRuleId }) {
+  try {
+    const rule = await deeplClient.getStyleRule(styleRuleId);
+
+    return mcpContentifyText(JSON.stringify({
+      id: rule.styleId,
+      name: rule.name,
+      language: rule.language,
+      creationTime: rule.creationTime,
+      updatedTime: rule.updatedTime,
+      version: rule.version,
+      configuredRules: rule.configuredRules,
+      customInstructions: rule.customInstructions
+    }, null, 2));
+  } catch (error) {
+    throw new Error(`Failed to get style rule: ${error.message}`);
+  }
+}
+
+async function createStyleRule({ name, language, configuredRules }) {
+  try {
+    const requestBody = { name, language };
+    if (configuredRules) requestBody.configured_rules = configuredRules;
+
+    const rule = await deeplClient.createStyleRule(requestBody);
+
+    return mcpContentifyText(JSON.stringify({
+      id: rule.styleId,
+      name: rule.name,
+      language: rule.language,
+      creationTime: rule.creationTime,
+      updatedTime: rule.updatedTime,
+      configuredRules: rule.configuredRules
+    }, null, 2));
+  } catch (error) {
+    throw new Error(`Failed to create style rule: ${error.message}`);
+  }
+}
+
+async function deleteStyleRule({ styleRuleId }) {
+  try {
+    await deeplClient.deleteStyleRule(styleRuleId);
+    return mcpContentifyText(`Style rule ${styleRuleId} deleted successfully`);
+  } catch (error) {
+    throw new Error(`Failed to delete style rule: ${error.message}`);
+  }
+}
+
+async function getUsage() {
+  try {
+    const usage = await deeplClient.getUsage();
+    const results = [];
+
+    if (usage.character) {
+      results.push(`Characters: ${usage.character.count} of ${usage.character.limit} used`);
+      if (usage.character.limitReached()) {
+        results.push('⚠️ Character limit reached!');
+      }
+    }
+    if (usage.document) {
+      results.push(`Documents: ${usage.document.count} of ${usage.document.limit} used`);
+      if (usage.document.limitReached()) {
+        results.push('⚠️ Document limit reached!');
+      }
+    }
+    if (usage.teamDocument) {
+      results.push(`Team documents: ${usage.teamDocument.count} of ${usage.teamDocument.limit} used`);
+      if (usage.teamDocument.limitReached()) {
+        results.push('⚠️ Team document limit reached!');
+      }
+    }
+
+    if (results.length === 0) {
+      results.push('No usage data available');
+    }
+
+    return mcpContentifyText(results);
+  } catch (error) {
+    throw new Error(`Failed to get usage: ${error.message}`);
   }
 }
 

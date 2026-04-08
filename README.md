@@ -14,7 +14,13 @@ A Model Context Protocol (MCP) server that provides translation capabilities usi
 - Access to all DeepL API languages and features
 - Automatic language detection
 - Formality control for supported languages
-- DeepL glossary support for consistent terminology translation
+- DeepL glossary support for consistent terminology translation (create, update, delete)
+- Style rules for consistent translation styles
+- Translation model selection (quality vs latency optimized)
+- Tag handling for HTML and XML content
+- Custom translation instructions
+- Document minification for large files
+- API usage monitoring
 
 ## Usage
 
@@ -109,14 +115,36 @@ Once configured, Claude will be able to use the DeepL translation tools when nee
 
 This server provides the following tools:
 
+### Translation
+- `translate-text`: Translate text to a target language with support for glossaries, style rules, model selection, tag handling, and custom instructions
+- `translate-document`: Translate a document file with support for glossaries, style rules, and document minification
+- `rephrase-text`: Rephrase text in the same or different language with writing style and tone control
+
+### Languages
 - `get-source-languages`: Get list of available source languages for translation
 - `get-target-languages`: Get list of available target languages for translation
-- `translate-text`: Translate text to a target language
-- `rephrase-text`: Rephrase text in the same or different language
-- `translate-document`: Translate a document
+- `get-writing-styles`: Get available writing styles for rephrasing
+- `get-writing-tones`: Get available writing tones for rephrasing
+
+### Glossaries
 - `list-glossaries`: Get list of all glossaries and their associated metadata
 - `get-glossary-info`: Get metadata about a specific glossary by id
 - `get-glossary-dictionary-entries`: Retrieve entries from a glossary dictionary
+- `create-glossary`: Create a new multilingual glossary with one or more dictionaries
+- `update-glossary-name`: Rename an existing glossary
+- `update-glossary-dictionary`: Update or add entries in a glossary dictionary
+- `delete-glossary`: Delete a glossary and all its dictionaries
+- `delete-glossary-dictionary`: Delete a specific dictionary from a glossary
+- `get-glossary-language-pairs`: Get supported language pairs for glossaries
+
+### Style Rules
+- `list-style-rules`: Get list of all available style rules
+- `get-style-rule`: Get detailed information about a specific style rule
+- `create-style-rule`: Create a new style rule
+- `delete-style-rule`: Delete a style rule
+
+### Account
+- `get-usage`: Get current API usage and limits
 
 ## Tool Details
 
@@ -137,7 +165,17 @@ Parameters:
   - `'default'`: use default formality
   - `'prefer_less'`: use informal language if available, otherwise default
   - `'prefer_more'`: use formal language if available, otherwise default
-  - `glossaryId` (optional): id of a glossary to apply to the translation
+- `glossaryId` (optional): ID of a glossary to apply to the translation
+- `styleRuleId` (optional): Style rule ID to apply a predefined style rule. Use `list-style-rules` to find available IDs.
+- `context` (optional): Additional context to improve translation accuracy (not translated itself)
+- `preserveFormatting` (optional): Set to true to preserve original formatting (recommended for markdown, code, HTML)
+- `splitSentences` (optional): Controls sentence splitting ('0' disables, '1' default, 'nonewlines' preserves line breaks)
+- `modelType` (optional): Translation model type:
+  - `'quality_optimized'`: best quality, slower response
+  - `'latency_optimized'`: fastest response, lower quality
+  - `'prefer_quality_optimized'`: best available quality for the language pair
+- `tagHandling` (optional): Parse tags before translation ('html' or 'xml')
+- `customInstructions` (optional): Array of custom instructions to guide translation (max 10, 300 chars each). Note: forces quality_optimized model type.
 
 #### translate-document
 This tool translates document files using the DeepL API. Supported formats include PDF, DOCX, PPTX, XLSX, HTML, TXT, and more.
@@ -151,6 +189,8 @@ Parameters:
 - `targetLangCode`: Target language code (e.g., 'en-US', 'de', 'fr')
 - `formality` (optional): Controls formality level (same options as `translate-text`)
 - `glossaryId` (optional): ID of a glossary to use for consistent terminology translation
+- `styleRuleId` (optional): Style rule ID to apply a predefined style rule. Use `list-style-rules` to find available IDs.
+- `enableDocumentMinification` (optional): Set to true to minify large documents (pptx, docx) by temporarily replacing media with placeholders before translation, useful for files approaching the 30MB API limit
 
 Returns:
 - Translation status
@@ -205,6 +245,91 @@ Returns:
 - Language pair being retrieved
 - All entries in the dictionary as key-value pairs
 
+#### create-glossary
+
+Creates a new multilingual glossary with one or more dictionaries.
+
+Parameters:
+- `name`: Name for the new glossary
+- `dictionaries`: Array of dictionaries, each with:
+  - `sourceLangCode`: Source language code
+  - `targetLangCode`: Target language code
+  - `entries`: Object mapping source terms to target terms (e.g., `{ "hello": "hallo", "world": "Welt" }`)
+
+#### update-glossary-name
+
+Renames an existing glossary.
+
+Parameters:
+- `glossaryId`: The unique identifier of the glossary
+- `name`: New name for the glossary
+
+#### update-glossary-dictionary
+
+Updates or adds entries in a glossary dictionary for a specific language pair. Existing entries for the same source term will be overwritten, new entries will be added, and entries not mentioned will be kept.
+
+Parameters:
+- `glossaryId`: The unique identifier of the glossary
+- `sourceLangCode`: Source language code
+- `targetLangCode`: Target language code
+- `entries`: Object mapping source terms to target terms
+
+#### delete-glossary
+
+Deletes a glossary and all its dictionaries.
+
+Parameters:
+- `glossaryId`: The unique identifier of the glossary to delete
+
+#### delete-glossary-dictionary
+
+Deletes a specific dictionary (language pair) from a glossary, without deleting the whole glossary.
+
+Parameters:
+- `glossaryId`: The unique identifier of the glossary
+- `sourceLangCode`: Source language code
+- `targetLangCode`: Target language code
+
+#### get-glossary-language-pairs
+
+Returns the list of language pairs supported for glossaries.
+
+_No parameters required._
+
+### Style Rule Tools
+
+Style rules allow you to customize your translations using a managed, shared list of rules for style, formatting, and more.
+
+#### list-style-rules
+
+Lists all available style rules with their IDs, names, and configuration.
+
+Parameters:
+- `detailed` (optional): Set to true to include configured rules and custom instructions in the response
+
+#### get-style-rule
+
+Gets detailed information about a specific style rule.
+
+Parameters:
+- `styleRuleId`: The unique identifier of the style rule
+
+#### create-style-rule
+
+Creates a new style rule.
+
+Parameters:
+- `name`: Name for the new style rule
+- `language`: Language code this style rule applies to
+- `configuredRules` (optional): Predefined rules organized by category (e.g., `{ "style_and_tone": { "formality": "formal" } }`)
+
+#### delete-style-rule
+
+Deletes a style rule by its ID.
+
+Parameters:
+- `styleRuleId`: The unique identifier of the style rule to delete
+
 ### Other tools
 
 #### rephrase-text
@@ -214,6 +339,7 @@ This tool rephrases text in a given language.
 Parameters:
 
 - `text`: The text to rephrase
+- `targetLangCode` (optional): Target language code for rephrasing. Leave empty for auto-detection.
 - `style` (optional): Writing style for the rephrased text. Use `get-writing-styles` to see available options (e.g., 'business', 'academic', 'casual')
 - `tone` (optional): Writing tone for the rephrased text. Use `get-writing-tones` to see available options (e.g., 'enthusiastic', 'friendly', 'professional')
 
@@ -231,20 +357,19 @@ _No parameters required._
 
 #### get-writing-styles
 
-Returns the list of available writing styles that can be used with the `rephrase-text` tool. These styles adjust the overall character of the writing to suit different contexts.
-
-No parameters required.
-
-
-#### get-source-languages
-
-Returns the complete list of source languages supported by the DeepL API, with language names and ISO-639 codes.
+Returns the list of available writing styles that can be used with the `rephrase-text` tool.
 
 _No parameters required._
 
-#### get-target-languages
+#### get-writing-tones
 
-Returns the complete list of target languages supported by the DeepL API, with language names and ISO-639 codes.
+Returns the list of available writing tones that can be used with the `rephrase-text` tool.
+
+_No parameters required._
+
+#### get-usage
+
+Returns current API usage and limits for your DeepL account, including character counts, document counts, and team document counts.
 
 _No parameters required._
 
