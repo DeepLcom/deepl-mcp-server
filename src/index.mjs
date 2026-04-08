@@ -13,7 +13,7 @@ const DEEPL_API_KEY = process.env.DEEPL_API_KEY;
 const deeplClientOptions = {
   appInfo: {
     appName: 'DeepL-MCP',
-    appVersion: '1.2.0',
+    appVersion: '1.1.0',
   },
 };
 
@@ -146,7 +146,9 @@ server.tool(
     splitSentences: z.enum(['0', '1', 'nonewlines']).optional().describe("Sentence splitting: '0' disables, '1' (default) splits on punctuation and newlines, 'nonewlines' preserves line breaks"),
     modelType: z.enum(modelTypes).optional().describe("Translation model type: 'quality_optimized' for best quality (slower), 'latency_optimized' for fastest response (lower quality), 'prefer_quality_optimized' for best available quality"),
     tagHandling: z.enum(tagHandlingModes).optional().describe("Type of tags to parse before translation: 'html' for HTML content, 'xml' for XML content"),
-    customInstructions: z.array(z.string()).optional().describe("Array of custom instructions to guide translation style (max 10 instructions, 300 chars each). Note: forces quality_optimized model type."),
+    customInstructions: z.array(
+      z.string().max(300, "Each custom instruction must be 300 characters or fewer")
+    ).max(10, "customInstructions can contain at most 10 instructions").optional().describe("Array of custom instructions to guide translation style (max 10 instructions, 300 chars each). Note: forces quality_optimized model type."),
   },
   translateText
 );
@@ -399,6 +401,9 @@ async function translateText ({
 
 // The type assertion below asserts that the API will return a single result, not an array of results
 async function rephraseText({ text, targetLangCode = null, style, tone }) {
+  if (targetLangCode) {
+    targetLangCode = targetLanguages.normalize(targetLangCode);
+  }
   try {
     const result = await deeplClient.rephraseText(text, targetLangCode, style, tone);
     const translation = /** @type {import('deepl-node').WriteResult} */ (result);
@@ -536,8 +541,8 @@ async function getGlossaryDictionaryEntries({ glossaryId, sourceLangCode, target
 async function createGlossary({ name, dictionaries }) {
   try {
     const glossaryDicts = dictionaries.map(dict => ({
-      sourceLangCode: dict.sourceLangCode,
-      targetLangCode: dict.targetLangCode,
+      sourceLangCode: dict.sourceLangCode.toLowerCase(),
+      targetLangCode: dict.targetLangCode.toLowerCase(),
       entries: new deepl.GlossaryEntries({ entries: dict.entries })
     }));
 
@@ -572,8 +577,8 @@ async function updateGlossaryName({ glossaryId, name }) {
 async function updateGlossaryDictionary({ glossaryId, sourceLangCode, targetLangCode, entries }) {
   try {
     const glossaryDict = {
-      sourceLangCode,
-      targetLangCode,
+      sourceLangCode: sourceLangCode.toLowerCase(),
+      targetLangCode: targetLangCode.toLowerCase(),
       entries: new deepl.GlossaryEntries({ entries })
     };
 
@@ -601,6 +606,8 @@ async function deleteGlossary({ glossaryId }) {
 
 async function deleteGlossaryDictionary({ glossaryId, sourceLangCode, targetLangCode }) {
   try {
+    sourceLangCode = sourceLangCode.toLowerCase();
+    targetLangCode = targetLangCode.toLowerCase();
     await deeplClient.deleteMultilingualGlossaryDictionary(glossaryId, sourceLangCode, targetLangCode);
     return mcpContentifyText(`Dictionary ${sourceLangCode} → ${targetLangCode} deleted from glossary ${glossaryId}`);
   } catch (error) {
