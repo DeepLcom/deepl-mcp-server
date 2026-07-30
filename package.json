@@ -8,6 +8,7 @@
   },
   "files": [
     "src",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],
@@ -32,7 +33,7 @@
     "claude",
     "ai"
   ],
-  "author": "",
+  "author": "DeepL SE <open-source@deepl.com> (https://www.deepl.com)",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/DeepL/deepl-mcp-server/issues"
