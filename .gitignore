@@ -135,11 +135,6 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# Python things: uv!
-.python-version
-uv.lock
-.venv/
-__pycache__/
 temp/
 
 # Claude Code local settings
