@@ -141,3 +141,6 @@ uv.lock
 .venv/
 __pycache__/
 temp/
+
+# Claude Code local settings
+.claude/

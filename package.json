@@ -6,12 +6,24 @@
   "bin": {
     "deepl-mcp-server": "./src/index.mjs"
   },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "eslint .",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "audit": "npm audit --omit=dev --audit-level=critical && (npm audit || echo 'Suppressing npm audit failures for dev dependencies')",
+    "test": "node --check src/index.mjs"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DeepLcom/deepl-mcp-server.git"
+    "url": "git+https://github.com/DeepL/deepl-mcp-server.git"
   },
   "keywords": [
     "deepl",
@@ -23,12 +35,23 @@
   "author": "",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/DeepLcom/deepl-mcp-server/issues"
+    "url": "https://github.com/DeepL/deepl-mcp-server/issues"
   },
-  "homepage": "https://github.com/DeepLcom/deepl-mcp-server#readme",
+  "homepage": "https://github.com/DeepL/deepl-mcp-server#readme",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.0",
-    "deepl-node": "^1.22.0",
-    "zod": "3.25"
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "deepl-node": "1.27.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@semantic-release/changelog": "6.0.3",
+    "@semantic-release/git": "10.0.1",
+    "@semantic-release/gitlab": "13.3.3",
+    "conventional-changelog-conventionalcommits": "10.2.1",
+    "eslint": "9.39.5",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.8.0",
+    "prettier": "3.9.6"
   }
 }
