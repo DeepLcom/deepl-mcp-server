@@ -1,0 +1,76 @@
+name: NodeJS
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "30 0 * * *"
+
+env:
+  SECRET_DETECTION_JSON_REPORT_FILE: "gitleaks.json"
+
+jobs:
+  eslint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: npm ci
+      - name: Run eslint check
+        run: npm run lint
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: npm ci
+      - name: Run format check
+        run: npm run format
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: npm ci
+      - name: Run npm audit
+        run: npm run audit
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+
+  secret_detection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install and run secret detection
+        run: |
+          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.4_linux_x64.tar.gz
+          EXITCODE=0
+          ./gitleaks detect -r ${SECRET_DETECTION_JSON_REPORT_FILE} --source . --log-opts="--all --full-history" || EXITCODE=$?
+          if [[ $EXITCODE -ne 0 ]]; then
+            exit $EXITCODE
+          fi
+      - name: Upload secret detection artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-detection-results
+          path: gitleaks.json

@@ -1,0 +1,4 @@
+# Note: This GitLab CI configuration is used for internal testing, users can ignore it.
+include:
+  - project: "${CI_PROJECT_NAMESPACE}/oss-ci-lib"
+    file: "/${CI_PROJECT_NAME}/.gitlab-ci.yml"
