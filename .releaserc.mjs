@@ -32,11 +32,9 @@ export default {
             { type: "patch", section: "Changed" },
             { type: "fix", section: "Fixed" },
           ],
-          formatCommitUrl: (context, commit) => `${publicRepositoryUrl}/commit/${commit.hash}`,
-          formatCompareUrl: (context) =>
-            `${publicRepositoryUrl}/compare/${context.previousTag}...${context.currentTag}`,
-          formatIssueUrl: (context, reference) =>
-            `${publicRepositoryUrl}/issues/${reference.issue}`,
+          commitUrlFormat: `${publicRepositoryUrl}/commit/{{hash}}`,
+          compareUrlFormat: `${publicRepositoryUrl}/compare/{{previousTag}}...{{currentTag}}`,
+          issueUrlFormat: `${publicRepositoryUrl}/issues/{{id}}`,
         },
       },
     ],

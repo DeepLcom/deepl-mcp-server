@@ -7,4 +7,10 @@
   ],
   semanticCommits: "enabled",
   labels: ["renovatebot"],
+  packageRules: [
+    {
+      matchPackageNames: ["conventional-changelog-conventionalcommits"],
+      allowedVersions: "<10",
+    },
+  ],
 }
