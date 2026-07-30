@@ -19,11 +19,13 @@ A Model Context Protocol (MCP) server that provides translation capabilities usi
 ## Usage
 
 The easiest way to run this server is to use the npm package without installing anything:
+
 ```bash
 npx deepl-mcp-server
 ```
 
 If you want to install this locally, so you can play with it to your heart's content, you can do so using npm:
+
 ```bash
 npm install deepl-mcp-server
 ```
@@ -140,11 +142,13 @@ Parameters:
   - `glossaryId` (optional): id of a glossary to apply to the translation
 
 #### translate-document
+
 This tool translates document files using the DeepL API. Supported formats include PDF, DOCX, PPTX, XLSX, HTML, TXT, and more.
 
 **Note**: Since this tool expects a filename, your AI agent will need access to a filesystem tool.
 
 Parameters:
+
 - `inputFile`: Path to the input document file to translate
 - `outputFile` (optional): Path where the translated document will be saved. If not provided, will be auto-generated based on the input filename with the target language code appended (e.g., `document_de.pdf` for German translation)
 - `sourceLangCode` (optional): Source language code (e.g., 'en', 'de', 'fr'). Leave empty for automatic detection. **Required when using a glossary**.
@@ -153,14 +157,15 @@ Parameters:
 - `glossaryId` (optional): ID of a glossary to use for consistent terminology translation
 
 Returns:
+
 - Translation status
 - Number of characters billed
 - Output file path
 
 ### Glossary Tools
 
-Most agents are smart enough to use a given glossary in translation if you pass along the glossary's name. 
-The agent can use `list-glossaries` to pull metadata on all your glossaries, which includes their names. 
+Most agents are smart enough to use a given glossary in translation if you pass along the glossary's name.
+The agent can use `list-glossaries` to pull metadata on all your glossaries, which includes their names.
 And then it can include the right glossary's id. But you can also just give the agent a glossary id.
 
 #### list-glossaries
@@ -168,6 +173,7 @@ And then it can include the right glossary's id. But you can also just give the 
 Lists all glossaries available in your DeepL account with their metadata.
 
 Returns for each glossary:
+
 - `id`: Unique identifier for the glossary
 - `name`: Human-readable name
 - `dictionaries`: Available language pair dictionaries (e.g., `{"en": ["de"], "de": ["en"]}` for bidirectional EN↔DE)
@@ -180,6 +186,7 @@ Returns for each glossary:
 Retrieves metadata about a specific glossary by its ID.
 
 Parameters:
+
 - `glossaryId`: The unique identifier of the glossary
 
 Returns the same information as `list-glossaries` but for a single glossary.
@@ -190,17 +197,19 @@ Returns the same information as `list-glossaries` but for a single glossary.
 
 Retrieves the actual term entries from a specific glossary dictionary.
 
-A dictionary is a list of entries for a specific language pair and translation direction. 
-A glossary can contain multiple dictionaries. For example, a bidirectional English-German glossary would have two dictionaries: one for EN→DE and another for DE→EN. 
+A dictionary is a list of entries for a specific language pair and translation direction.
+A glossary can contain multiple dictionaries. For example, a bidirectional English-German glossary would have two dictionaries: one for EN→DE and another for DE→EN.
 
 Most agents are able to retrieve an entire glossary by using `list-glossaries` or `get-glossary-info` to find available dictionaries, then calling this tool for each one.
 
 Parameters:
+
 - `glossaryId`: The unique identifier of the glossary
 - `sourceLangCode`: Source language code for the dictionary (e.g., 'en')
 - `targetLangCode`: Target language code for the dictionary (e.g., 'de')
 
 Returns:
+
 - Glossary name
 - Language pair being retrieved
 - All entries in the dictionary as key-value pairs
@@ -234,7 +243,6 @@ _No parameters required._
 Returns the list of available writing styles that can be used with the `rephrase-text` tool. These styles adjust the overall character of the writing to suit different contexts.
 
 No parameters required.
-
 
 #### get-source-languages
 
