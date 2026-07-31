@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/DeepL/deepl-mcp-server/compare/v1.2.2...v1.3.0) (2026-07-31)
+
+### Added
+
+* match the remote MCP server's tool surface ([743747f](https://github.com/DeepL/deepl-mcp-server/commit/743747f9eb2de949aee1bd650de6f9ade72cba60))
+
 ## [1.2.2](https://github.com/DeepL/deepl-mcp-server/compare/v1.2.1...v1.2.2) (2026-07-31)
 
 ### Changed
