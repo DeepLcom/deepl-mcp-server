@@ -355,7 +355,7 @@ async function translateText({
       `Target language used: ${targetLangCode}`,
     ]);
   } catch (error) {
-    throw new Error(`Translation failed: ${error.message}`);
+    throw new Error(`Translation failed: ${error.message}`, { cause: error });
   }
 }
 
@@ -366,24 +366,16 @@ async function rephraseText({ text, style, tone }) {
     const translation = /** @type {import('deepl-node').WriteResult} */ (result);
     return mcpContentifyText(translation.text);
   } catch (error) {
-    throw new Error(`Rephrasing failed: ${error.message}`);
+    throw new Error(`Rephrasing failed: ${error.message}`, { cause: error });
   }
 }
 
 async function getWritingStyles() {
-  try {
-    return mcpContentifyText(writingStyles);
-  } catch (error) {
-    throw new Error(`Failed to get writing styles and tones: ${error.message}`);
-  }
+  return mcpContentifyText(writingStyles);
 }
 
 async function getWritingTones() {
-  try {
-    return mcpContentifyText(writingTones);
-  } catch (error) {
-    throw new Error(`Failed to get writing styles and tones: ${error.message}`);
-  }
+  return mcpContentifyText(writingTones);
 }
 
 async function translateDocument({
@@ -432,7 +424,7 @@ async function translateDocument({
       `Output file: ${outputFile}`,
     ]);
   } catch (error) {
-    throw new Error(`Document translation failed: ${error.message}`);
+    throw new Error(`Document translation failed: ${error.message}`, { cause: error });
   }
 }
 
@@ -459,7 +451,7 @@ async function listGlossaries() {
 
     return mcpContentifyText(results);
   } catch (error) {
-    throw new Error(`Failed to list glossaries: ${error.message}`);
+    throw new Error(`Failed to list glossaries: ${error.message}`, { cause: error });
   }
 }
 
@@ -476,7 +468,7 @@ async function getGlossary({ glossaryId }) {
 
     return mcpContentifyText(JSON.stringify(result, null, 2));
   } catch (error) {
-    throw new Error(`Failed to get glossary: ${error.message}`);
+    throw new Error(`Failed to get glossary: ${error.message}`, { cause: error });
   }
 }
 
@@ -506,7 +498,9 @@ async function getGlossaryDictionaryEntries({ glossaryId, sourceLangCode, target
 
     return mcpContentifyText(results);
   } catch (error) {
-    throw new Error(`Failed to get glossary dictionary entries: ${error.message}`);
+    throw new Error(`Failed to get glossary dictionary entries: ${error.message}`, {
+      cause: error,
+    });
   }
 }
 
