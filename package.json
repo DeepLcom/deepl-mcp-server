@@ -42,15 +42,15 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
     "deepl-node": "1.27.0",
-    "zod": "3.25.76"
+    "zod": "4.4.3"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.5",
-    "@semantic-release/changelog": "6.0.3",
-    "@semantic-release/git": "10.0.1",
+    "@eslint/js": "10.0.1",
+    "@semantic-release/changelog": "7.0.0",
+    "@semantic-release/git": "11.0.1",
     "@semantic-release/gitlab": "13.3.3",
     "conventional-changelog-conventionalcommits": "9.1.0",
-    "eslint": "9.39.5",
+    "eslint": "10.8.0",
     "eslint-config-prettier": "10.1.8",
     "globals": "17.8.0",
     "prettier": "3.9.6"
