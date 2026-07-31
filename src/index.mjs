@@ -489,20 +489,20 @@ async function getGlossaryDictionaryEntries({ glossaryId, sourceLangCode, target
       );
     }
 
-    const glossary = await deeplClient.getMultilingualGlossary(glossaryId);
+    const dictionarySourceLang = sourceLangCode.split("-")[0].toLowerCase();
+    const dictionaryTargetLang = targetLangCode.split("-")[0].toLowerCase();
 
     const entriesResult = await deeplClient.getMultilingualGlossaryDictionaryEntries(
       glossaryId,
-      sourceLangCode,
-      targetLangCode,
+      dictionarySourceLang,
+      dictionaryTargetLang,
     );
 
     const results = [
-      `Glossary: ${glossary.name}`,
-      `Language pair: ${sourceLangCode} → ${targetLangCode}`,
+      `Language pair: ${dictionarySourceLang} → ${dictionaryTargetLang}`,
       "",
       "Entries:",
-      JSON.stringify(entriesResult.entries, null, 2),
+      JSON.stringify(entriesResult.entries.entries(), null, 2),
     ];
 
     return mcpContentifyText(results);
