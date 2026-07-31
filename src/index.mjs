@@ -406,8 +406,7 @@ async function translateDocument({
   if (!outputFile) {
     const path = await import("path");
     const parsedPath = path.parse(inputFile);
-    const langCodeSet1 = targetLangCode.split("-")[0]; // Get language code without region (e.g., 'en' from 'en-US')
-    outputFile = path.join(parsedPath.dir, `${parsedPath.name}_${langCodeSet1}${parsedPath.ext}`);
+    outputFile = path.join(parsedPath.dir, `${parsedPath.name}_${targetLangCode}${parsedPath.ext}`);
   }
 
   try {
