@@ -37,6 +37,8 @@ const glossaryLanguageCodeDescription =
   "language code, in standard ISO-639-1 format without a regional variant (e.g. 'en', 'de', 'fr')";
 const glossaryEntriesGuidance =
   "This does not fetch any glossary entries. Use the get-glossary-dictionary-entries tool to fetch entries.";
+const styleRuleDescription =
+  "Style rule ID to apply. Use the list-style-rules tool to discover available style rules.";
 
 /*--------------------------------------------------------------------
  *  Set up DeepL things
@@ -55,6 +57,16 @@ const formalityTypes = /** @type {const} */ ([
   "prefer_less",
   "prefer_more",
 ]);
+
+/**
+ * Text inputs take a single string or an array of strings, each handled independently
+ * @param {string} verb
+ */
+function textInput(verb) {
+  return z
+    .union([z.string(), z.array(z.string())])
+    .describe(`Text to ${verb}, as a single string or an array of strings handled independently`);
+}
 
 /**
  * Class to handle a list of languages and associated ISO-639 codes.
@@ -174,7 +186,7 @@ server.tool(
   "translate-text",
   "Translate text to a target language using DeepL API. Review all available optional parameters and use those applicable to your scenario for best results. When the translation includes a glossary, you must specify the source language as well as the target language. If the user requests a glossary by name instead of by id, you can use the list-glossaries tool to get a name for each id.",
   {
-    text: z.string().describe("Text to translate"),
+    text: textInput("translate"),
     sourceLangCode: z
       .string()
       .optional()
@@ -190,6 +202,7 @@ server.tool(
       .string()
       .optional()
       .describe("Glossary ID to ensure consistent terminology translation"),
+    styleId: z.string().optional().describe(styleRuleDescription),
     context: z
       .string()
       .optional()
@@ -232,9 +245,15 @@ server.tool(
 
 server.tool(
   "rephrase-text",
-  "Rephrase text in the same language using DeepL API",
+  "Rephrase text in the same language, or into a different language, using DeepL API",
   {
-    text: z.string().describe("Text to rephrase"),
+    text: textInput("rephrase"),
+    targetLangCode: z
+      .string()
+      .optional()
+      .describe(
+        `target ${languageCodeDescription} to rephrase into a different language, or leave empty to keep the original language`,
+      ),
     style: z.enum(writingStyles).optional().describe("Writing style for rephrasing"),
     tone: z.enum(writingTones).optional().describe("Writing tone for rephrasing"),
   },
@@ -262,6 +281,13 @@ server.tool(
       .optional()
       .describe("Controls whether translations should lean toward informal or formal language"),
     glossaryId: z.string().optional().describe("ID of glossary to use for translation"),
+    styleId: z.string().optional().describe(styleRuleDescription),
+    outputFormat: z
+      .string()
+      .optional()
+      .describe(
+        "Desired output file format (e.g. 'pdf'), or leave empty to keep the input format. Only some conversions are supported.",
+      ),
   },
   translateDocument,
 );
@@ -294,6 +320,45 @@ server.tool(
   getGlossaryDictionaryEntries,
 );
 
+server.tool(
+  "list-style-rules",
+  "Get a list of all style rules with metadata for each - id, name, language, and timestamps. Style rules can be applied when translating text or documents. Use the get-style-rule tool to fetch the configured rules and custom instructions of a single style rule.",
+  {
+    page: z.number().int().min(0).optional().describe("Page number, 0-based"),
+    pageSize: z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .optional()
+      .describe("Number of style rules per page (max 10)"),
+    detailed: z
+      .boolean()
+      .optional()
+      .describe("Set to true to include the configured rules and custom instructions of each rule"),
+  },
+  listStyleRules,
+);
+
+server.tool(
+  "get-style-rule",
+  "Given an id, get a single style rule with its full detail - configured rules and custom instructions.",
+  {
+    styleId: z.string().describe("The unique identifier of the style rule"),
+  },
+  getStyleRule,
+);
+
+server.tool(
+  "get-custom-instruction",
+  "Get a single custom instruction belonging to a style rule. Use the get-style-rule tool to find out which custom instructions a style rule contains.",
+  {
+    styleId: z.string().describe("The unique identifier of the style rule"),
+    instructionId: z.string().describe("The unique identifier of the custom instruction"),
+  },
+  getCustomInstruction,
+);
+
 /*--------------------------------------------------------------------
  *  Server tool callback functions
  *-------------------------------------------------------------------*/
@@ -316,13 +381,13 @@ async function getTargetLanguages() {
   }
 }
 
-// The type assertion below asserts that the API will return a single result, not an array of results
 async function translateText({
   text,
   sourceLangCode = null,
   targetLangCode,
   formality,
   glossaryId,
+  styleId,
   context,
   preserveFormatting,
   splitSentences,
@@ -341,17 +406,21 @@ async function translateText({
     if (glossaryId) {
       options.glossary = glossaryId;
     }
+    if (styleId) options.styleRule = styleId;
     if (context) options.context = context;
     if (preserveFormatting !== undefined) options.preserveFormatting = preserveFormatting;
     if (splitSentences) options.splitSentences = splitSentences;
     if (customInstructions) options.customInstructions = customInstructions;
 
     const result = await deeplClient.translateText(text, sourceLangCode, targetLangCode, options);
-    const translation = /** @type {import('deepl-node').TextResult} */ (result);
+    const translations = /** @type {import('deepl-node').TextResult[]} */ (
+      Array.isArray(result) ? result : [result]
+    );
+    const detectedSourceLangs = [...new Set(translations.map((t) => t.detectedSourceLang))];
 
     return mcpContentifyText([
-      translation.text,
-      `Detected source language: ${translation.detectedSourceLang}`,
+      ...translations.map((translation) => translation.text),
+      `Detected source language${detectedSourceLangs.length > 1 ? "s" : ""}: ${detectedSourceLangs.join(", ")}`,
       `Target language used: ${targetLangCode}`,
     ]);
   } catch (error) {
@@ -359,12 +428,18 @@ async function translateText({
   }
 }
 
-// The type assertion below asserts that the API will return a single result, not an array of results
-async function rephraseText({ text, style, tone }) {
+async function rephraseText({ text, targetLangCode, style, tone }) {
+  if (targetLangCode) {
+    const targetLanguages = await LanguagesList.get("target");
+    targetLangCode = standardizeLangCase(targetLanguages.normalize(targetLangCode));
+  }
+
   try {
-    const result = await deeplClient.rephraseText(text, null, style, tone);
-    const translation = /** @type {import('deepl-node').WriteResult} */ (result);
-    return mcpContentifyText(translation.text);
+    const result = await deeplClient.rephraseText(text, targetLangCode ?? null, style, tone);
+    const rephrasings = /** @type {import('deepl-node').WriteResult[]} */ (
+      Array.isArray(result) ? result : [result]
+    );
+    return mcpContentifyText(rephrasings.map((rephrasing) => rephrasing.text));
   } catch (error) {
     throw new Error(`Rephrasing failed: ${error.message}`, { cause: error });
   }
@@ -385,6 +460,8 @@ async function translateDocument({
   targetLangCode,
   formality,
   glossaryId,
+  styleId,
+  outputFormat,
 }) {
   if (sourceLangCode) {
     const sourceLanguages = await LanguagesList.get("source");
@@ -398,13 +475,21 @@ async function translateDocument({
   if (!outputFile) {
     const path = await import("path");
     const parsedPath = path.parse(inputFile);
-    outputFile = path.join(parsedPath.dir, `${parsedPath.name}_${targetLangCode}${parsedPath.ext}`);
+    const extension = outputFormat ? `.${outputFormat.toLowerCase()}` : parsedPath.ext;
+    outputFile = path.join(parsedPath.dir, `${parsedPath.name}_${targetLangCode}${extension}`);
   }
 
   try {
     const options = { formality };
     if (glossaryId) {
       options.glossary = glossaryId;
+    }
+    // The client library ignores styleRule for documents, so both extras go via extra parameters
+    const extraRequestParameters = {};
+    if (styleId) extraRequestParameters.style_id = styleId;
+    if (outputFormat) extraRequestParameters.output_format = outputFormat;
+    if (Object.keys(extraRequestParameters).length > 0) {
+      options.extraRequestParameters = extraRequestParameters;
     }
 
     const result = await deeplClient.translateDocument(
@@ -504,9 +589,53 @@ async function getGlossaryDictionaryEntries({ glossaryId, sourceLangCode, target
   }
 }
 
+async function listStyleRules({ page, pageSize, detailed }) {
+  try {
+    const styleRules = await deeplClient.getAllStyleRules(page, pageSize, detailed);
+
+    if (styleRules.length === 0) {
+      return mcpContentifyText("No style rules found");
+    }
+
+    return mcpContentifyText(styleRules.map((styleRule) => JSON.stringify(styleRule, null, 2)));
+  } catch (error) {
+    throw new Error(`Failed to list style rules: ${error.message}`, { cause: error });
+  }
+}
+
+async function getStyleRule({ styleId }) {
+  try {
+    const styleRule = await deeplClient.getStyleRule(styleId);
+    return mcpContentifyText(JSON.stringify(styleRule, null, 2));
+  } catch (error) {
+    throw new Error(`Failed to get style rule: ${error.message}`, { cause: error });
+  }
+}
+
+async function getCustomInstruction({ styleId, instructionId }) {
+  try {
+    const instruction = await deeplClient.getStyleRuleCustomInstruction(styleId, instructionId);
+    return mcpContentifyText(JSON.stringify(instruction, null, 2));
+  } catch (error) {
+    throw new Error(`Failed to get custom instruction: ${error.message}`, { cause: error });
+  }
+}
+
 /*--------------------------------------------------------------------
  *  Helper functions
  *-------------------------------------------------------------------*/
+
+/**
+ * Cast a language code the way the API wants it, like `en-US`. The client library does this itself
+ * for translations, but not for rephrasing
+ * @param {string} code
+ */
+function standardizeLangCase(code) {
+  const [lang, region] = code.split("-", 2);
+  return region === undefined
+    ? lang.toLowerCase()
+    : `${lang.toLowerCase()}-${region.toUpperCase()}`;
+}
 
 /**
  * Helper function which wraps a string or strings in the object structure MCP expects
