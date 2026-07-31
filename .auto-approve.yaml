@@ -1,0 +1,11 @@
+paths:
+  - path: "*.md"
+    reason: "Documentation"
+  - path: "/renovate.json5"
+    reason: "Renovate configuration"
+  - path: "/.prettierrc.json"
+    reason: "Formatting configuration"
+  - path: "/.prettierignore"
+    reason: "Formatting configuration"
+  - path: "/.gitignore"
+    reason: "Git ignore rules"
