@@ -31,6 +31,10 @@ const deeplClientOptions = {
 // Descriptive text for reuse in our tools
 const languageCodeDescription =
   "language code, in standard ISO-639-1 format (e.g. 'en-US', 'de', 'fr')";
+const sourceLanguageCodeDescription =
+  "language code, in standard ISO-639-1 format (e.g. 'en', 'de', 'fr')";
+const glossaryLanguageCodeDescription =
+  "language code, in standard ISO-639-1 format without a regional variant (e.g. 'en', 'de', 'fr')";
 const glossaryEntriesGuidance =
   "This does not fetch any glossary entries. Use the get-glossary-dictionary-entries tool to fetch entries.";
 
@@ -128,12 +132,16 @@ class LanguagesList {
       return countryDefault;
     }
 
-    // Otherwise, ensure that the language code we're passed is supported
-    if (!this.list.some((lang) => lang.code === lowerCode)) {
-      throw new Error(`Invalid language code: ${lowerCode}. Available codes: ${this.codesList}`);
+    if (this.list.some((lang) => lang.code === lowerCode)) {
+      return lowerCode;
     }
 
-    return lowerCode;
+    const baseCode = lowerCode.split("-")[0];
+    if (this.direction === "source" && this.list.some((lang) => lang.code === baseCode)) {
+      return baseCode;
+    }
+
+    throw new Error(`Invalid language code: ${lowerCode}. Available codes: ${this.codesList}`);
   }
 }
 
@@ -170,7 +178,7 @@ server.tool(
     sourceLangCode: z
       .string()
       .optional()
-      .describe(`source ${languageCodeDescription}, or leave empty for auto-detection`),
+      .describe(`source ${sourceLanguageCodeDescription}, or leave empty for auto-detection`),
     targetLangCode: z.string().describe("target " + languageCodeDescription),
     formality: z
       .enum(formalityTypes)
@@ -247,7 +255,7 @@ server.tool(
     sourceLangCode: z
       .string()
       .optional()
-      .describe(`source ${languageCodeDescription}, or leave empty for auto-detection`),
+      .describe(`source ${sourceLanguageCodeDescription}, or leave empty for auto-detection`),
     targetLangCode: z.string().describe("target " + languageCodeDescription),
     formality: z
       .enum(["less", "more", "default", "prefer_less", "prefer_more"])
@@ -280,8 +288,8 @@ server.tool(
   "Retrieve all the entries from a given glossary dictionary. (A glossary consists one of one or more dictionaries, each of which contains entries for a specific language pair, in one direction. For example, one dictionary could contain entries for translations from German to English, and another dictionary could contain entries for translations from English to German.) To retrieve all entries for a glossary with multiple dictionaries, use the get-glossary-info or list-glossaries tool to find out what dictionaries it contains, then use this tool for each dictionary.",
   {
     glossaryId: z.string().describe("The unique identifier of the glossary"),
-    sourceLangCode: z.string().describe(`source ${languageCodeDescription}`),
-    targetLangCode: z.string().describe(`target ${languageCodeDescription}`),
+    sourceLangCode: z.string().describe(`source ${glossaryLanguageCodeDescription}`),
+    targetLangCode: z.string().describe(`target ${glossaryLanguageCodeDescription}`),
   },
   getGlossaryDictionaryEntries,
 );
@@ -322,7 +330,7 @@ async function translateText({
 }) {
   if (sourceLangCode) {
     const sourceLanguages = await LanguagesList.get("source");
-    sourceLanguages.normalize(sourceLangCode);
+    sourceLangCode = sourceLanguages.normalize(sourceLangCode);
   }
 
   const targetLanguages = await LanguagesList.get("target");
@@ -388,7 +396,7 @@ async function translateDocument({
 }) {
   if (sourceLangCode) {
     const sourceLanguages = await LanguagesList.get("source");
-    sourceLanguages.normalize(sourceLangCode);
+    sourceLangCode = sourceLanguages.normalize(sourceLangCode);
   }
 
   const targetLanguages = await LanguagesList.get("target");
