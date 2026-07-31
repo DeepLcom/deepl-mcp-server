@@ -4,16 +4,27 @@
  *  Imports and constants
  *-------------------------------------------------------------------*/
 
+import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import * as deepl from "deepl-node";
 
+const { version: packageVersion } = createRequire(import.meta.url)("../package.json");
+
 const DEEPL_API_KEY = process.env.DEEPL_API_KEY;
+
+if (!DEEPL_API_KEY) {
+  console.error(
+    "DEEPL_API_KEY is not set. Create an API key at https://www.deepl.com/pro-api and provide it to this server as the DEEPL_API_KEY environment variable.",
+  );
+  process.exit(1);
+}
+
 const deeplClientOptions = {
   appInfo: {
     appName: "DeepL-MCP",
-    appVersion: "0.1.3-beta.0",
+    appVersion: packageVersion,
   },
 };
 
@@ -57,6 +68,8 @@ class LanguagesList {
     zh: "zh-Hans",
   };
 
+  static #pending = new Map();
+
   constructor(list, direction = null) {
     this.list = list;
     this.codesList = list.map((lang) => lang.code).join(", ");
@@ -73,6 +86,20 @@ class LanguagesList {
     const lowerCaseLangs = langs.map(({ name, code }) => ({ name, code: code.toLowerCase() }));
     const instance = new LanguagesList(lowerCaseLangs, direction);
     return instance;
+  }
+
+  static async get(direction) {
+    let pending = LanguagesList.#pending.get(direction);
+
+    if (!pending) {
+      pending = LanguagesList.create(direction).catch((error) => {
+        LanguagesList.#pending.delete(direction);
+        throw error;
+      });
+      LanguagesList.#pending.set(direction, pending);
+    }
+
+    return pending;
   }
 
   /**
@@ -110,16 +137,13 @@ class LanguagesList {
   }
 }
 
-const sourceLanguages = await LanguagesList.create("source");
-const targetLanguages = await LanguagesList.create("target");
-
 /*--------------------------------------------------------------------
  *  Create MCP server
  *-------------------------------------------------------------------*/
 
 const server = new McpServer({
   name: "deepl",
-  version: "1.0.0",
+  version: packageVersion,
 });
 
 /*--------------------------------------------------------------------
@@ -268,17 +292,19 @@ server.tool(
 
 async function getSourceLanguages() {
   try {
-    return mcpContentifyText(sourceLanguages.list.map(JSON.stringify));
+    const sourceLanguages = await LanguagesList.get("source");
+    return mcpContentifyText(sourceLanguages.list.map((lang) => JSON.stringify(lang)));
   } catch (error) {
-    throw new Error(`Failed to get source languages: ${error.message}`);
+    throw new Error(`Failed to get source languages: ${error.message}`, { cause: error });
   }
 }
 
 async function getTargetLanguages() {
   try {
-    return mcpContentifyText(targetLanguages.list.map(JSON.stringify));
+    const targetLanguages = await LanguagesList.get("target");
+    return mcpContentifyText(targetLanguages.list.map((lang) => JSON.stringify(lang)));
   } catch (error) {
-    throw new Error(`Failed to get target languages: ${error.message}`);
+    throw new Error(`Failed to get target languages: ${error.message}`, { cause: error });
   }
 }
 
@@ -295,9 +321,11 @@ async function translateText({
   customInstructions,
 }) {
   if (sourceLangCode) {
+    const sourceLanguages = await LanguagesList.get("source");
     sourceLanguages.normalize(sourceLangCode);
   }
 
+  const targetLanguages = await LanguagesList.get("target");
   targetLangCode = targetLanguages.normalize(targetLangCode);
 
   try {
@@ -359,9 +387,11 @@ async function translateDocument({
   glossaryId,
 }) {
   if (sourceLangCode) {
+    const sourceLanguages = await LanguagesList.get("source");
     sourceLanguages.normalize(sourceLangCode);
   }
 
+  const targetLanguages = await LanguagesList.get("target");
   targetLangCode = targetLanguages.normalize(targetLangCode);
 
   // Generate output file name if not provided
