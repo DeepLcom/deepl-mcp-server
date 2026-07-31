@@ -1,3 +1,16 @@
+## [1.2.2](https://github.com/DeepL/deepl-mcp-server/compare/v1.2.1...v1.2.2) (2026-07-31)
+
+### Changed
+
+* attach the original error as a cause when rethrowing ([36ef88b](https://github.com/DeepL/deepl-mcp-server/commit/36ef88b685529aa9ca9a9b268d6bd9ce7fb4ae14))
+
+### Fixed
+
+* accept regional source language codes and use the normalized value ([b05f81c](https://github.com/DeepL/deepl-mcp-server/commit/b05f81c65da781593e296c50a23ea6ff97ea3f47))
+* keep the regional variant in generated document filenames ([4022d4f](https://github.com/DeepL/deepl-mcp-server/commit/4022d4f331010ed8eec100047f4668b3d0d12ce7))
+* report a single version and start without blocking API calls ([9e1605c](https://github.com/DeepL/deepl-mcp-server/commit/9e1605cf6cb8b3d076d0f58b1849da8c874cf3d8))
+* return plain glossary entries and use non-regional dictionary codes ([f923e89](https://github.com/DeepL/deepl-mcp-server/commit/f923e89f45845dc5727b4745be4cab23d2be91d2))
+
 ## [1.2.1](https://github.com/DeepL/deepl-mcp-server/compare/v1.2.0...v1.2.1) (2026-07-31)
 
 ### Changed
