@@ -20,7 +20,7 @@
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "audit": "npm audit --omit=dev --audit-level=critical && (npm audit || echo 'Suppressing npm audit failures for dev dependencies')",
-    "test": "node --check src/index.mjs"
+    "test": "vitest run"
   },
   "repository": {
     "type": "git",
@@ -53,6 +53,7 @@
     "eslint": "10.8.0",
     "eslint-config-prettier": "10.1.8",
     "globals": "17.8.0",
-    "prettier": "3.9.6"
+    "prettier": "3.9.6",
+    "vitest": "4.1.10"
   }
 }

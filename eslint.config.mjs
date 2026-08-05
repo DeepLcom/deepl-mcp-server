@@ -6,7 +6,7 @@ export default [
   { ignores: ["node_modules/"] },
   js.configs.recommended,
   {
-    files: ["src/**/*.mjs", "eslint.config.mjs", ".releaserc.mjs"],
+    files: ["src/**/*.mjs", "test/**/*.mjs", "eslint.config.mjs", ".releaserc.mjs"],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: "module",
