@@ -5,12 +5,24 @@
     ":pinAllExceptPeerDependencies",
     "helpers:pinGitHubActionDigests",
   ],
+  timezone: "Europe/Berlin",
   semanticCommits: "enabled",
   labels: ["renovatebot"],
+  minimumReleaseAge: "3 days",
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ["before 6am on monday"],
+  },
   packageRules: [
     {
       matchPackageNames: ["conventional-changelog-conventionalcommits"],
       allowedVersions: "<10",
+    },
+    {
+      description: "One MR for the dev tooling, none of which cuts a release",
+      matchDepTypes: ["devDependencies"],
+      matchUpdateTypes: ["minor", "patch", "pin"],
+      groupName: "dev dependencies",
     },
   ],
 }
