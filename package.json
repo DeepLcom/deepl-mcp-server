@@ -49,11 +49,11 @@
     "@semantic-release/changelog": "7.0.0",
     "@semantic-release/git": "11.0.1",
     "@semantic-release/gitlab": "13.3.3",
-    "conventional-changelog-conventionalcommits": "9.1.0",
-    "eslint": "10.8.0",
+    "conventional-changelog-conventionalcommits": "9.3.1",
+    "eslint": "10.9.0",
     "eslint-config-prettier": "10.1.8",
-    "globals": "17.8.0",
+    "globals": "17.11.0",
     "prettier": "3.9.6",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   }
 }
