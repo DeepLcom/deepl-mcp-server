@@ -15,6 +15,21 @@ function createClient() {
     rephraseText: vi.fn(async () => ({ text: "Hello there" })),
     translateDocument: vi.fn(async () => ({ status: "done", billedCharacters: 12 })),
     listMultilingualGlossaries: vi.fn(async () => []),
+    getMultilingualGlossary: vi.fn(async () => ({
+      glossaryId: "glossary-1",
+      name: "Terms",
+      dictionaries: [{ sourceLang: "en", targetLang: "de" }],
+      creationTime: new Date("2026-01-02T03:04:05Z"),
+    })),
+    getMultilingualGlossaryDictionaryEntries: vi.fn(async () => ({
+      entries: { entries: () => ({ hello: "hallo" }) },
+    })),
+    getAllStyleRules: vi.fn(async () => []),
+    getStyleRule: vi.fn(async () => ({ styleId: "style-1", name: "House style" })),
+    getStyleRuleCustomInstruction: vi.fn(async () => ({
+      customInstructionId: "instruction-1",
+      prompt: "Keep it short",
+    })),
   };
 }
 
@@ -184,5 +199,173 @@ describe("listGlossaries", () => {
     const result = await handlers.listGlossaries();
 
     expect(result.content).toEqual([{ type: "text", text: "No glossaries found" }]);
+  });
+
+  it("formats glossary metadata", async () => {
+    const client = createClient();
+    client.listMultilingualGlossaries.mockResolvedValueOnce([
+      {
+        glossaryId: "glossary-1",
+        name: "Terms",
+        dictionaries: [{ sourceLang: "en", targetLang: "de" }],
+        creationTime: "2026-01-02T03:04:05Z",
+      },
+    ]);
+
+    const result = await createHandlers(client).listGlossaries();
+
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      id: "glossary-1",
+      name: "Terms",
+      dictionaries: [{ sourceLang: "en", targetLang: "de" }],
+      creationTime: "2026-01-02T03:04:05Z",
+    });
+  });
+});
+
+describe("language and writing metadata", () => {
+  it("returns source and target languages", async () => {
+    const handlers = createHandlers(createClient());
+
+    await expect(handlers.getSourceLanguages()).resolves.toEqual({
+      content: [
+        { type: "text", text: JSON.stringify({ name: "English", code: "en" }) },
+        { type: "text", text: JSON.stringify({ name: "German", code: "de" }) },
+      ],
+    });
+    await expect(handlers.getTargetLanguages()).resolves.toEqual({
+      content: [
+        { type: "text", text: JSON.stringify({ name: "English (American)", code: "en-us" }) },
+        { type: "text", text: JSON.stringify({ name: "German", code: "de" }) },
+      ],
+    });
+  });
+
+  it("returns the writing styles and tones exposed by deepl-node", async () => {
+    const handlers = createHandlers(createClient());
+
+    const styles = await handlers.getWritingStyles();
+    const tones = await handlers.getWritingTones();
+
+    expect(styles.content.length).toBeGreaterThan(0);
+    expect(tones.content.length).toBeGreaterThan(0);
+    expect(styles.content.every(({ type, text }) => type === "text" && text.length > 0)).toBe(true);
+    expect(tones.content.every(({ type, text }) => type === "text" && text.length > 0)).toBe(true);
+  });
+});
+
+describe("glossary handlers", () => {
+  it("gets glossary metadata by id", async () => {
+    const client = createClient();
+
+    const result = await createHandlers(client).getGlossary({ glossaryId: "glossary-1" });
+
+    expect(client.getMultilingualGlossary).toHaveBeenCalledWith("glossary-1");
+    expect(JSON.parse(result.content[0].text)).toMatchObject({ id: "glossary-1", name: "Terms" });
+  });
+
+  it("normalizes a dictionary language pair and returns its entries", async () => {
+    const client = createClient();
+
+    const result = await createHandlers(client).getGlossaryDictionaryEntries({
+      glossaryId: "glossary-1",
+      sourceLangCode: "EN-US",
+      targetLangCode: "DE",
+    });
+
+    expect(client.getMultilingualGlossaryDictionaryEntries).toHaveBeenCalledWith(
+      "glossary-1",
+      "en",
+      "de",
+    );
+    expect(result.content.map(({ text }) => text)).toContain("Language pair: en → de");
+    expect(result.content.at(-1).text).toContain("hello");
+  });
+
+  it("requires both dictionary languages", async () => {
+    const handlers = createHandlers(createClient());
+
+    await expect(
+      handlers.getGlossaryDictionaryEntries({ glossaryId: "glossary-1", sourceLangCode: "en" }),
+    ).rejects.toThrow("you must specify its source and target languages");
+  });
+});
+
+describe("style rule handlers", () => {
+  it("reports an empty style-rule list", async () => {
+    const result = await createHandlers(createClient()).listStyleRules({
+      page: 0,
+      pageSize: 10,
+      detailed: true,
+    });
+
+    expect(result.content).toEqual([{ type: "text", text: "No style rules found" }]);
+  });
+
+  it("forwards pagination and formats style rules", async () => {
+    const client = createClient();
+    client.getAllStyleRules.mockResolvedValueOnce([{ styleId: "style-1", name: "House style" }]);
+
+    const result = await createHandlers(client).listStyleRules({
+      page: 2,
+      pageSize: 5,
+      detailed: false,
+    });
+
+    expect(client.getAllStyleRules).toHaveBeenCalledWith(2, 5, false);
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      styleId: "style-1",
+      name: "House style",
+    });
+  });
+
+  it("gets a style rule and custom instruction", async () => {
+    const client = createClient();
+    const handlers = createHandlers(client);
+
+    const style = await handlers.getStyleRule({ styleId: "style-1" });
+    const instruction = await handlers.getCustomInstruction({
+      styleId: "style-1",
+      instructionId: "instruction-1",
+    });
+
+    expect(client.getStyleRule).toHaveBeenCalledWith("style-1");
+    expect(client.getStyleRuleCustomInstruction).toHaveBeenCalledWith("style-1", "instruction-1");
+    expect(JSON.parse(style.content[0].text).name).toBe("House style");
+    expect(JSON.parse(instruction.content[0].text).prompt).toBe("Keep it short");
+  });
+});
+
+describe("handler errors", () => {
+  it.each([
+    ["getSourceLanguages", "getSourceLanguages", "Failed to get source languages"],
+    ["getTargetLanguages", "getTargetLanguages", "Failed to get target languages"],
+    ["rephraseText", "rephraseText", "Rephrasing failed"],
+    ["translateDocument", "translateDocument", "Document translation failed"],
+    ["listGlossaries", "listMultilingualGlossaries", "Failed to list glossaries"],
+    ["getGlossary", "getMultilingualGlossary", "Failed to get glossary"],
+    ["listStyleRules", "getAllStyleRules", "Failed to list style rules"],
+    ["getStyleRule", "getStyleRule", "Failed to get style rule"],
+    ["getCustomInstruction", "getStyleRuleCustomInstruction", "Failed to get custom instruction"],
+  ])("wraps failures from %s", async (handlerName, clientMethod, message) => {
+    const client = createClient();
+    const cause = new Error("service unavailable");
+    client[clientMethod].mockRejectedValueOnce(cause);
+    const handlers = createHandlers(client);
+    const args = {
+      getSourceLanguages: undefined,
+      getTargetLanguages: undefined,
+      rephraseText: { text: "Hello" },
+      translateDocument: { inputFile: "report.docx", targetLangCode: "de" },
+      listGlossaries: undefined,
+      getGlossary: { glossaryId: "glossary-1" },
+      listStyleRules: {},
+      getStyleRule: { styleId: "style-1" },
+      getCustomInstruction: { styleId: "style-1", instructionId: "instruction-1" },
+    };
+
+    await expect(handlers[handlerName](args[handlerName])).rejects.toThrow(
+      expect.objectContaining({ message: `${message}: service unavailable`, cause }),
+    );
   });
 });
