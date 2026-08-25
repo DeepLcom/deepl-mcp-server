@@ -41,7 +41,7 @@
   "homepage": "https://github.com/DeepL/deepl-mcp-server#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "deepl-node": "1.27.0",
+    "deepl-node": "1.28.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
