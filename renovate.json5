@@ -24,5 +24,10 @@
       matchUpdateTypes: ["minor", "patch", "pin"],
       groupName: "dev dependencies",
     },
+    {
+      description: "Automerge non-major updates once the pipeline passes",
+      matchUpdateTypes: ["minor", "patch", "pin", "digest", "pinDigest", "lockFileMaintenance"],
+      addLabels: ["automerge"],
+    },
   ],
 }
