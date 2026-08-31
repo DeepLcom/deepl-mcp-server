@@ -11,7 +11,7 @@
   minimumReleaseAge: "3 days",
   lockFileMaintenance: {
     enabled: true,
-    schedule: ["before 6am on monday"],
+    schedule: ["before 1am on monday"],
   },
   packageRules: [
     {
